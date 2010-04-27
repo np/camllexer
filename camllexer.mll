@@ -239,30 +239,29 @@ module Make (Loc : LOC)
     | lowercase identchar * as x                                     { LIDENT x }
     | uppercase identchar * as x                                     { UIDENT x }
     | int_literal as i
-        { try  INT(int_of_string i, i)
+        { try  mkINT i
           with Failure _ -> err (Literal_overflow "int") (Loc.of_lexbuf lexbuf) }
     | float_literal as f
-        { try  FLOAT(float_of_string f, f)
+        { try  mkFLOAT f
           with Failure _ -> err (Literal_overflow "float") (Loc.of_lexbuf lexbuf) }
     | (int_literal as i) "l"
-        { try  INT32(Int32.of_string i, i)
+        { try  mkINT32 i
           with Failure _ -> err (Literal_overflow "int32") (Loc.of_lexbuf lexbuf) }
     | (int_literal as i) "L"
-        { try  INT64(Int64.of_string i, i)
+        { try  mkINT64 i
           with Failure _ -> err (Literal_overflow "int64") (Loc.of_lexbuf lexbuf) }
     | (int_literal as i) "n"
-        { try NATIVEINT(Nativeint.of_string i, i)
+        { try mkNATIVEINT i
           with Failure _ -> err (Literal_overflow "nativeint") (Loc.of_lexbuf lexbuf) }
     | '"'
         { with_curr_loc string c;
-          let s = buff_contents c in STRING (Camltoken.Eval.string s, s)             }
+          let s = buff_contents c in mkSTRING s                                 }
     | "'" (newline as x) "'"
-        { update_loc c None 1 false 1; CHAR (Camltoken.Eval.char x, x)               }
+        { update_loc c None 1 false 1; mkCHAR x                                 }
     | "'" ( [^ '\\' '\010' '\013']
           | '\\' (['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
                 |['0'-'9'] ['0'-'9'] ['0'-'9']
-                |'x' hexa_char hexa_char)
-          as x) "'"                                { CHAR (Camltoken.Eval.char x, x) }
+                |'x' hexa_char hexa_char) as x) "'"                  { mkCHAR x }
     | "'\\" (_ as c)
         { err (Illegal_escape (String.make 1 c)) (Loc.of_lexbuf lexbuf)         }
     | "(*"
