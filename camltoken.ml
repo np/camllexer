@@ -62,7 +62,6 @@ let token_to_string = function
     COMMENT       s      |
     INT           (_, s) |
     FLOAT         (_, s) |
-    ANTIQUOT      (_, s) |
     BLANKS        s -> s
 
   | ESCAPED_IDENT s      -> sf "( %s )" s
@@ -76,6 +75,8 @@ let token_to_string = function
   (* 's' is already properly escaped *)
   | STRING        (_, s) -> sf "\"%s\"" s
 
+  | ANTIQUOT     ("", c) -> sf "$%s$" c
+  | ANTIQUOT      (n, c) -> sf "$%s:%s$" n c
   | QUOTATION     q -> quotation_to_string q
   | NEWLINE         -> "\n"
   | EOI             -> assert false
