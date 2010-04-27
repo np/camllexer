@@ -49,26 +49,34 @@ let rec unparse_tokens =
 
 let main () =
   let usage () = 
-    Printf.eprintf "Usage: pplex [-s|-r] ( - | <file.ml> )\n%!";
-    Printf.eprintf " -s Shows the token in a easily parsable format\n%!";
-    Printf.eprintf " -r Reverse the preprocessor by reading the -s output format\n%!";
+    Printf.eprintf "Usage: pplex [-s|-r|-Q|-A|-h] [-|<file.ml>]\n";
+    Printf.eprintf " -s Show the token in a easily parsable format\n";
+    Printf.eprintf " -r Reverse the preprocessor by reading the -s output format\n";
+    Printf.eprintf " -Q Enable the lexing of quotations\n";
+    Printf.eprintf " -A Enable the lexing of anti-quotations\n";
+    Printf.eprintf " -h Display this help and exit\n";
     exit 1
   in
   let argv = Array.to_list Sys.argv in
   let rm x xs = List.mem x xs, List.filter ((<>) x) xs in
-  let filename, show, reverse =
-    let argv = List.tl argv in
-    let show, argv = rm "-s" argv in
-    let reverse, argv = rm "-r" argv in
+  let argv = List.tl argv in
+  let show, argv = rm "-s" argv in
+  let reverse, argv = rm "-r" argv in
+  let quotations, argv = rm "-Q" argv in
+  let antiquotations, argv = rm "-A" argv in
+  let help, argv = rm "-h" argv in
+  let () = if help then usage () in
+  let filename =
     match argv with
-    | [filename] -> filename, show, reverse
-    | _::_ | []  -> usage ()
+    | [filename]  -> filename
+    | []          -> "-"
+    | _           -> usage ()
   in
   let loc = Loc.mk filename in
   let ic = if filename = "-" then stdin else open_in filename in
   let lexbuf = Lexing.from_channel ic in
   let () = Lex.setup_loc lexbuf loc in
-  let strm = Lex.from_lexbuf ~quotations:true ~antiquotations:true lexbuf in
+  let strm = Lex.from_lexbuf ~quotations ~antiquotations lexbuf in
   let show_token_nl x = print_string (show_token x); print_char '\n' in
   let print_token x = print_string (token_to_string x) in
   let exn_to_string = function
