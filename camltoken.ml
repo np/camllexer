@@ -82,30 +82,35 @@ let token_to_string = function
   | LINE_DIRECTIVE (i, Some s) -> sf "# %d \"%s\"\n" i s
   | LINE_DIRECTIVE (i, None) -> sf "# %d\n" i
 
-let show_token = function
-  | KEYWORD s       -> sf "KEYWORD %S" s
-  | SYMBOL s        -> sf "SYMBOL %S" s
-  | LIDENT s        -> sf "LIDENT %S" s
-  | UIDENT s        -> sf "UIDENT %S" s
-  | INT(_, s)       -> sf "INT %S" s
-  | INT32(_, s)     -> sf "INT32 %S" s 
-  | INT64(_, s)     -> sf "INT64 %S" s 
-  | NATIVEINT(_,s)  -> sf "NATIVEINT %S" s
-  | FLOAT(_, s)     -> sf "FLOAT %S" s
-  | CHAR(_, s)      -> sf "CHAR %S" s
-  | STRING(_, s)    -> sf "STRING \"%s\"" s
-                    (* here it's not %S since the string is already escaped *)
-  | LABEL s         -> sf "LABEL %S" s
-  | OPTLABEL s      -> sf "OPTLABEL %S" s
-  | ANTIQUOT(n, s)  -> sf "ANTIQUOT %S %S" n s
-  | QUOTATION x     -> sf "QUOTATION %S %S %S" x.q_name x.q_loc x.q_contents
-  | COMMENT s       -> sf "COMMENT %S" s
-  | BLANKS s        -> sf "BLANKS %S" s
-  | NEWLINE         -> sf "NEWLINE"
-  | EOI             -> sf "EOI"
-  | ESCAPED_IDENT s -> sf "ESCAPED_IDENT %S" s
-  | LINE_DIRECTIVE(i, None)   -> sf "LINE_DIRECTIVE \"%d\"" i
-  | LINE_DIRECTIVE(i, Some s) -> sf "LINE_DIRECTIVE \"%d\" %S" i s
+let strings_of_token = function
+  | KEYWORD s        -> ("KEYWORD", [s])
+  | SYMBOL s         -> ("SYMBOL", [s])
+  | LIDENT s         -> ("LIDENT", [s])
+  | UIDENT s         -> ("UIDENT", [s])
+  | INT(_, s)        -> ("INT", [s])
+  | INT32(_, s)      -> ("INT32", [s]) 
+  | INT64(_, s)      -> ("INT64", [s]) 
+  | NATIVEINT(_, s)  -> ("NATIVEINT", [s])
+  | FLOAT(_, s)      -> ("FLOAT", [s])
+  | CHAR(_, s)       -> ("CHAR", [s])
+  | STRING(s, _)     -> ("STRING", [s]) (* here we give the evaluated string *)
+  | LABEL s          -> ("LABEL", [s])
+  | OPTLABEL s       -> ("OPTLABEL", [s])
+  | ANTIQUOT(n, s)   -> ("ANTIQUOT", [n; s])
+  | QUOTATION x      -> ("QUOTATION", [x.q_name; x.q_loc;
+                                       string_of_int x.q_shift; x.q_contents])
+  | COMMENT s        -> ("COMMENT", [s])
+  | BLANKS s         -> ("BLANKS", [s])
+  | NEWLINE          -> ("NEWLINE", [])
+  | EOI              -> ("EOI", [])
+  | ESCAPED_IDENT s  -> ("ESCAPED_IDENT", [s])
+  | LINE_DIRECTIVE(i, None)   -> ("LINE_DIRECTIVE", [string_of_int i])
+  | LINE_DIRECTIVE(i, Some s) -> ("LINE_DIRECTIVE", [string_of_int i; s])
+
+let show_token t =
+  let (name, args) = strings_of_token t in
+  if args = [] then name else
+  sf "%s \"%s\"" name (String.concat "\" \"" (List.map String.escaped args))
 
 module Eval = struct
 
@@ -169,3 +174,37 @@ module Eval = struct
 
 end
 
+let mkCHAR       s = CHAR(Eval.char s, s)
+let mkSTRING     s = STRING(Eval.string s, s)
+let mkINT        s = INT(int_of_string s, s)
+let mkINT32      s = INT32(Int32.of_string s, s) 
+let mkINT64      s = INT64(Int64.of_string s, s) 
+let mkNATIVEINT  s = NATIVEINT(Nativeint.of_string s, s)
+let mkFLOAT      s = FLOAT(float_of_string s, s)
+
+let token_of_strings = function
+  | "KEYWORD", [s]           -> Some (KEYWORD s)
+  | "SYMBOL", [s]            -> Some (SYMBOL s)
+  | "LIDENT", [s]            -> Some (LIDENT s)
+  | "UIDENT", [s]            -> Some (UIDENT s)
+  | "INT", [s]               -> Some (mkINT s)
+  | "INT32", [s]             -> Some (mkINT32 s) 
+  | "INT64", [s]             -> Some (mkINT64 s) 
+  | "NATIVEINT", [s]         -> Some (mkNATIVEINT s)
+  | "FLOAT", [s]             -> Some (mkFLOAT s)
+  | "CHAR", [s]              -> Some (mkCHAR s)
+  | "STRING", [s]            -> Some (STRING(s, String.escaped s))
+  | "LABEL", [s]             -> Some (LABEL s)
+  | "OPTLABEL", [s]          -> Some (OPTLABEL s)
+  | "ANTIQUOT", [n; s]       -> Some (ANTIQUOT(n, s))
+  | "QUOTATION", [n;l;s;c]   -> Some (QUOTATION{q_name=n;q_loc=l
+                                               ;q_shift=int_of_string s
+                                               ;q_contents=c})
+  | "COMMENT", [s]           -> Some (COMMENT s)
+  | "BLANKS", [s]            -> Some (BLANKS s)
+  | "NEWLINE", []            -> Some NEWLINE
+  | "EOI", []                -> Some EOI
+  | "ESCAPED_IDENT", [s]     -> Some (ESCAPED_IDENT s)
+  | "LINE_DIRECTIVE", [i]    -> Some (LINE_DIRECTIVE(int_of_string i, None))
+  | "LINE_DIRECTIVE", [i; s] -> Some (LINE_DIRECTIVE(int_of_string i, Some s))
+  | _                        -> None

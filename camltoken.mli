@@ -50,6 +50,14 @@ type caml_token =
   | LINE_DIRECTIVE of int * string option
   | EOI
 
+val mkCHAR : string -> caml_token
+val mkSTRING : string -> caml_token
+val mkINT : string -> caml_token
+val mkINT32 : string -> caml_token
+val mkINT64 : string -> caml_token
+val mkNATIVEINT : string -> caml_token
+val mkFLOAT : string -> caml_token
+
 val quotation_to_string : quotation -> string
 
 (** Display a caml token in caml lexical syntax.
@@ -62,7 +70,24 @@ val quotation_to_string : quotation -> string
  *)
 val token_to_string : caml_token -> string
 
-(** Show a caml token in a easily parsable format.
+(** Turns a caml token in a pair of a name and a list of
+    arguments.
+
+    Examples:
+      LIDENT "foo"               -> ("LIDENT", ["foo"])
+      INT(42, "00000042")        -> ("INT", ["00000042"])
+      CHAR('\n', "\\n")          -> ("CHAR", ["'\n'"])
+      STRING("f\"o", "f\\\"o")   -> ("STRING", ["\"f\\\"o\""])
+      ANTIQUOT("foo","bar")      -> ("ANTIQUOT", ["foo"; "bar"])
+      LINE_DIRECTIVE(42,Some"f") -> ("LINE_DIRECTIVE", ["42"; "f"])
+      LINE_DIRECTIVE(42,None)    -> ("LINE_DIRECTIVE", ["42"])
+*)
+val strings_of_token : caml_token -> (string * string list)
+
+(** Does the oppsite job of show_token *)
+val token_of_strings : (string * string list) -> caml_token option
+
+(** Show a caml token in an easily parsable format.
     The format is the token name and arguments strings
     separated by one space.
 
