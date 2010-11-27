@@ -22,12 +22,14 @@ type quotation =
     q_shift    : int    ;
     q_contents : string }
 
+type blanks = string
+
 type caml_token =
   | KEYWORD       of string
-  | SYMBOL        of string
   | LIDENT        of string
   | UIDENT        of string
-  | ESCAPED_IDENT of string
+  | SYMBOL        of string
+  | PSYMBOL       of blanks * string * blanks
   | INT           of int * string
   | INT32         of int32 * string
   | INT64         of int64 * string
@@ -40,7 +42,7 @@ type caml_token =
   | QUOTATION     of quotation
   | ANTIQUOT      of string * string
   | COMMENT       of string
-  | BLANKS        of string
+  | BLANKS        of blanks
   | NEWLINE
   | LINE_DIRECTIVE of int * string option
   | EOI
@@ -51,6 +53,26 @@ let quotation_to_string {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
   let locname = if l = "" then "" else sf "@%s" l in
   if n = "" then sf "<%s<%s>>" locname s
   else sf "<:%s%s<%s>>" n locname s
+
+let blank c = List.mem c [' '; '\009'; '\012']
+
+let blanks s =
+  let len = String.length s in
+  let rec loop i = i >= len || blank s.[i] && loop (i+1)
+  in loop 0
+
+let escaped_ident_to_string pre_blanks op post_blanks =
+  assert (op <> "");
+  assert (blanks pre_blanks);
+  assert (blanks post_blanks);
+  let pre_blanks =
+    if pre_blanks = "" && op.[0] = '*' then " " else pre_blanks
+  in
+  let post_blanks =
+    if post_blanks = "" && op.[String.length op - 1] = '*'
+    then " " else post_blanks
+  in
+  sf "(%s%s%s)" pre_blanks op post_blanks
 
 let token_to_string = function
   | KEYWORD       s      |
@@ -64,7 +86,7 @@ let token_to_string = function
     FLOAT         (_, s) |
     BLANKS        s -> s
 
-  | ESCAPED_IDENT s      -> sf "( %s )" s
+  | PSYMBOL       (x,y,z)-> escaped_ident_to_string x y z
   | INT32         (_, s) -> sf "%sl" s
   | INT64         (_, s) -> sf "%sL" s
   | NATIVEINT     (_, s) -> sf "%sn" s
@@ -104,7 +126,7 @@ let strings_of_token = function
   | BLANKS s         -> ("BLANKS", [s])
   | NEWLINE          -> ("NEWLINE", [])
   | EOI              -> ("EOI", [])
-  | ESCAPED_IDENT s  -> ("ESCAPED_IDENT", [s])
+  | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
   | LINE_DIRECTIVE(i, None)   -> ("LINE_DIRECTIVE", [string_of_int i])
   | LINE_DIRECTIVE(i, Some s) -> ("LINE_DIRECTIVE", [string_of_int i; s])
 
@@ -205,7 +227,7 @@ let token_of_strings = function
   | "BLANKS", [s]            -> Some (BLANKS s)
   | "NEWLINE", []            -> Some NEWLINE
   | "EOI", []                -> Some EOI
-  | "ESCAPED_IDENT", [s]     -> Some (ESCAPED_IDENT s)
+  | "PSYMBOL", [x; y; z]     -> Some (PSYMBOL (x,y,z))
   | "LINE_DIRECTIVE", [i]    -> Some (LINE_DIRECTIVE(int_of_string i, None))
   | "LINE_DIRECTIVE", [i; s] -> Some (LINE_DIRECTIVE(int_of_string i, Some s))
   | _                        -> None

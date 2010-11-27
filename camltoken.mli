@@ -27,12 +27,14 @@ type quotation = {
   q_contents : string;
 }
 
+type blanks = string
+
 type caml_token =
   | KEYWORD of string
-  | SYMBOL of string
   | LIDENT of string
   | UIDENT of string
-  | ESCAPED_IDENT of string
+  | SYMBOL of string
+  | PSYMBOL of blanks * string * blanks
   | INT of int * string
   | INT32 of int32 * string
   | INT64 of int64 * string
@@ -45,7 +47,7 @@ type caml_token =
   | QUOTATION of quotation
   | ANTIQUOT of string * string
   | COMMENT of string
-  | BLANKS of string
+  | BLANKS of blanks
   | NEWLINE
   | LINE_DIRECTIVE of int * string option
   | EOI

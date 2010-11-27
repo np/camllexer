@@ -293,15 +293,15 @@ module Make (Loc : LOC)
       { let inum = int_of_string num
         in update_loc c name inum true 0; LINE_DIRECTIVE(inum, name)            }
     | '(' (not_star_symbolchar as op) ')'
-                                             { ESCAPED_IDENT (String.make 1 op) }
+                                           { PSYMBOL ("", String.make 1 op, "") }
     | '(' (not_star_symbolchar symbolchar* not_star_symbolchar as op) ')'
-                                                             { ESCAPED_IDENT op }
-    | '(' (not_star_symbolchar symbolchar* as op) blank+ ')'
-                                                             { ESCAPED_IDENT op }
-    | '(' blank+ (symbolchar* not_star_symbolchar as op) ')'
-                                                             { ESCAPED_IDENT op }
-    | '(' blank+ (symbolchar+ as op) blank+ ')'
-                                                             { ESCAPED_IDENT op }
+                                                         { PSYMBOL ("", op, "") }
+    | '(' (not_star_symbolchar symbolchar* as op) (blank+ as bl) ')'
+                                                         { PSYMBOL ("", op, bl) }
+    | '(' (blank+ as bl) (symbolchar* not_star_symbolchar as op) ')'
+                                                         { PSYMBOL (bl, op, "") }
+    | '(' (blank+ as pbl) (symbolchar+ as op) (blank+ as sbl) ')'
+                                                       { PSYMBOL (pbl, op, sbl) }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"
       | ":=" | ":>" | ";"  | ";;" | "_"
       | left_delimitor | right_delimitor ) as x  { SYMBOL x }
