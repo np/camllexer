@@ -38,7 +38,7 @@ exception PPLexParseError
 
 let rec unparse_tokens =
   parser
-  | [< '(UIDENT name, loc); args = strings; '(NEWLINE,_); strm >] ->
+  | [< '(UIDENT name, loc); args = strings; '(NEWLINE _,_); strm >] ->
       begin match token_of_strings (name, args) with
       | Some x -> [< '(x,loc); unparse_tokens strm >]
       | None   -> Loc.raise loc PPLexParseError

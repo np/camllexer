@@ -23,6 +23,7 @@ type quotation =
     q_contents : string }
 
 type blanks = string
+type comment = string
 
 type caml_token =
   | KEYWORD       of string
@@ -41,11 +42,13 @@ type caml_token =
   | OPTLABEL      of string
   | QUOTATION     of quotation
   | ANTIQUOT      of string * string
-  | COMMENT       of string
+  | COMMENT       of comment
   | BLANKS        of blanks
-  | NEWLINE
-  | LINE_DIRECTIVE of int * string option
+  | NEWLINE       of newline
+  | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
   | EOI
+
+and newline = LF | CR | CRLF
 
 let sf = Printf.sprintf
 
@@ -54,12 +57,22 @@ let quotation_to_string {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
   if n = "" then sf "<%s<%s>>" locname s
   else sf "<:%s%s<%s>>" n locname s
 
-let blank c = List.mem c [' '; '\009'; '\012']
-
-let blanks s =
+let for_all p s =
   let len = String.length s in
-  let rec loop i = i >= len || blank s.[i] && loop (i+1)
+  let rec loop i = i >= len || p s.[i] && loop (i+1)
   in loop 0
+
+let blank c = List.mem c [' '; '\t'; '\012']
+let newline c = List.mem c ['\r'; '\n']
+
+let blanks = for_all blank
+
+let no_newline = for_all (fun c -> not (newline c))
+
+let newline_to_string = function
+  | LF   -> "\n"
+  | CR   -> "\r"
+  | CRLF -> "\r\n"
 
 let escaped_ident_to_string pre_blanks op post_blanks =
   assert (op <> "");
@@ -100,10 +113,17 @@ let token_to_string = function
   | ANTIQUOT     ("", c) -> sf "$%s$" c
   | ANTIQUOT      (n, c) -> sf "$%s:%s$" n c
   | QUOTATION     q -> quotation_to_string q
-  | NEWLINE         -> "\n"
+  | NEWLINE nl      -> newline_to_string nl
   | EOI             -> assert false
-  | LINE_DIRECTIVE (i, Some s) -> sf "# %d \"%s\"\n" i s
-  | LINE_DIRECTIVE (i, None) -> sf "# %d\n" i
+  | LINE_DIRECTIVE (bl1, i, bl2, sopt, com) ->
+      assert (blanks bl1);
+      assert (blanks bl2);
+      assert (no_newline com);
+      match sopt with
+      | Some s ->
+          sf "#%s%d%s\"%s\"%s\n" bl1 i bl2 s com
+      | None ->
+          sf "#%s%d%s%s\n" bl1 i bl2 com
 
 let strings_of_token = function
   | KEYWORD s        -> ("KEYWORD", [s])
@@ -124,11 +144,13 @@ let strings_of_token = function
                                        string_of_int x.q_shift; x.q_contents])
   | COMMENT s        -> ("COMMENT", [s])
   | BLANKS s         -> ("BLANKS", [s])
-  | NEWLINE          -> ("NEWLINE", [])
+  | NEWLINE nl       -> ("NEWLINE", [newline_to_string nl])
   | EOI              -> ("EOI", [])
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
-  | LINE_DIRECTIVE(i, None)   -> ("LINE_DIRECTIVE", [string_of_int i])
-  | LINE_DIRECTIVE(i, Some s) -> ("LINE_DIRECTIVE", [string_of_int i; s])
+  | LINE_DIRECTIVE(bl1, i, bl2, sopt, com) ->
+      match sopt with
+      | None   -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; com])
+      | Some s -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; s; com])
 
 let show_token t =
   let (name, args) = strings_of_token t in
@@ -205,6 +227,13 @@ let mkINT64      s = INT64(Int64.of_string s, s)
 let mkNATIVEINT  s = NATIVEINT(Nativeint.of_string s, s)
 let mkFLOAT      s = FLOAT(float_of_string s, s)
 
+(* not exported *)
+let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?s ?(com="") i =
+  assert (blanks bl1);
+  assert (blanks bl2);
+  assert (no_newline com);
+  LINE_DIRECTIVE(bl1, int_of_string i, bl2, s, com)
+
 let token_of_strings = function
   | "KEYWORD", [s]           -> Some (KEYWORD s)
   | "SYMBOL", [s]            -> Some (SYMBOL s)
@@ -225,9 +254,20 @@ let token_of_strings = function
                                                ;q_contents=c})
   | "COMMENT", [s]           -> Some (COMMENT s)
   | "BLANKS", [s]            -> Some (BLANKS s)
-  | "NEWLINE", []            -> Some NEWLINE
+  | "NEWLINE", []            -> Some (NEWLINE LF) (* lax in the input *)
+  | "NEWLINE", ["\n"]        -> Some (NEWLINE LF)
+  | "NEWLINE", ["\r"]        -> Some (NEWLINE CR)
+  | "NEWLINE", ["\r\n"]      -> Some (NEWLINE CRLF)
   | "EOI", []                -> Some EOI
   | "PSYMBOL", [x; y; z]     -> Some (PSYMBOL (x,y,z))
-  | "LINE_DIRECTIVE", [i]    -> Some (LINE_DIRECTIVE(int_of_string i, None))
-  | "LINE_DIRECTIVE", [i; s] -> Some (LINE_DIRECTIVE(int_of_string i, Some s))
+  | "LINE_DIRECTIVE", xs     ->
+      begin match xs with
+      (* One are a bit lax in the input *)
+      | [i]                  -> Some (mkLINE_DIRECTIVE i)
+      | [i; s]               -> Some (mkLINE_DIRECTIVE ~s i)
+
+      | [bl1; i; bl2; com]   -> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~com i)
+      | [bl1; i; bl2; s; com]-> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~s ~com i)
+      | _                    -> None
+      end
   | _                        -> None

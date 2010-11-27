@@ -232,7 +232,9 @@ module Make (Loc : LOC)
 
 
   rule token c = parse
-    | newline                            { update_loc c None 1 false 0; NEWLINE }
+    | '\n'                            { update_loc c None 1 false 0; NEWLINE LF }
+    | '\r'                            { update_loc c None 1 false 0; NEWLINE CR }
+    | "\r\n"                        { update_loc c None 1 false 0; NEWLINE CRLF }
     | blank + as x                                                   { BLANKS x }
     | "~" (lowercase identchar * as x) ':'                            { LABEL x }
     | "?" (lowercase identchar * as x) ':'                         { OPTLABEL x }
@@ -287,11 +289,12 @@ module Make (Loc : LOC)
     | "<:"
       { if quotations c then with_curr_loc maybe_quotation_colon c
         else parse (symbolchar_star "<:") c                                     }
-    | "#" [' ' '\t']* (['0'-'9']+ as num) [' ' '\t']*
+    | "#" ([' ' '\t']* as bl1) (['0'-'9']+ as num) ([' ' '\t']* as bl2)
           ("\"" ([^ '\n' '\r' '"' ] * as name) "\"")?
-          [^ '\n' '\r']* newline
-      { let inum = int_of_string num
-        in update_loc c name inum true 0; LINE_DIRECTIVE(inum, name)            }
+          ([^ '\n' '\r']* as com) newline
+                                    { let inum = int_of_string num in
+                                      update_loc c name inum true 0;
+                                      LINE_DIRECTIVE(bl1, inum, bl2, name, com) }
     | '(' (not_star_symbolchar as op) ')'
                                            { PSYMBOL ("", String.make 1 op, "") }
     | '(' (not_star_symbolchar symbolchar* not_star_symbolchar as op) ')'
@@ -318,11 +321,11 @@ module Make (Loc : LOC)
 
   and comment c = parse
       "(*"
-        { store c; with_curr_loc comment c; parse comment c                     }
+                            { store c; with_curr_loc comment c; parse comment c }
     | "*)"                                                            { store c }
     | '<' (':' ident)? ('@' locname)? '<'
-        { store c;
-          if quotations c then with_curr_loc quotation c; parse comment c       }
+              { store c;
+                if quotations c then with_curr_loc quotation c; parse comment c }
     | ident                                             { store_parse comment c }
     | "\""
         { store c;

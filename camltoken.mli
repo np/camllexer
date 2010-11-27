@@ -49,13 +49,13 @@ type caml_token =
                       (** Caml(p4) quotations like `<<bla>>', `<:foo<bar>>'... *)
   | ANTIQUOT of string * string
                       (** Caml(p4) anti-quotations like `$bla$', `$foo:bar$'... *)
-  | COMMENT of string
+  | COMMENT of comment
                       (** Caml comments like `(* foo *)'... *)
   | BLANKS of blanks
                       (** Caml blanks like spaces, tabulations... *)
-  | NEWLINE
+  | NEWLINE of newline
                       (** Caml new lines: `\n', `\r', or `\r\n'. *)
-  | LINE_DIRECTIVE of int * string option
+  | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
                       (** Caml line directives `# 42', `# 2 "bla"' *)
   | EOI
                       (** End of input *)
@@ -72,6 +72,9 @@ and quotation = {
 }
 
 and blanks = string
+and comment = string
+
+and newline = LF | CR | CRLF
 
 val mkCHAR : string -> caml_token
 val mkSTRING : string -> caml_token
@@ -102,8 +105,10 @@ val token_to_string : caml_token -> string
       CHAR('\n', "\\n")          -> ("CHAR", ["'\n'"])
       STRING("f\"o", "f\\\"o")   -> ("STRING", ["\"f\\\"o\""])
       ANTIQUOT("foo","bar")      -> ("ANTIQUOT", ["foo"; "bar"])
-      LINE_DIRECTIVE(42,Some"f") -> ("LINE_DIRECTIVE", ["42"; "f"])
-      LINE_DIRECTIVE(42,None)    -> ("LINE_DIRECTIVE", ["42"])
+      LINE_DIRECTIVE(" ",42," ",Some"f","bla")
+         -> ("LINE_DIRECTIVE", [" "; "42"; " "; "f"; "bla"])
+      LINE_DIRECTIVE("",42,"",None,"")
+         -> ("LINE_DIRECTIVE", ["";"42";"";""])
 *)
 val strings_of_token : caml_token -> (string * string list)
 
@@ -120,8 +125,10 @@ val token_of_strings : (string * string list) -> caml_token option
       CHAR('\n', "\\n")          -> CHAR "'\n'"
       STRING("f\"o", "f\\\"o")   -> STRING "\"f\\\"o\""
       ANTIQUOT("foo","bar")      -> ANTIQUOT "foo" "bar"
-      LINE_DIRECTIVE(42,Some"f") -> LINE_DIRECTIVE "42" "f"
-      LINE_DIRECTIVE(42,None)    -> LINE_DIRECTIVE "42"
+      LINE_DIRECTIVE("",42,"",Some"f","")
+        -> LINE_DIRECTIVE "" "42" "" "f" ""
+      LINE_DIRECTIVE("",42,"",None,"")
+        -> LINE_DIRECTIVE "" "42" "" ""
 *)
 val show_token : caml_token -> string
 
