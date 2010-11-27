@@ -165,8 +165,8 @@ module Make (Loc : LOC)
 
   }
 
-  let newline = ('\010' | '\013' | "\013\010")
-  let blank = [' ' '\009' '\012']
+  let newline = ('\n' | '\r' | "\r\n")
+  let blank = [' ' '\t' '\012']
   let lowercase = ['a'-'z' '\223'-'\246' '\248'-'\255' '_']
   let uppercase = ['A'-'Z' '\192'-'\214' '\216'-'\222']
   let identchar =
@@ -258,7 +258,7 @@ module Make (Loc : LOC)
           let s = buff_contents c in mkSTRING s                                 }
     | "'" (newline as x) "'"
         { update_loc c None 1 false 1; mkCHAR x                                 }
-    | "'" ( [^ '\\' '\010' '\013']
+    | "'" ( [^ '\\' '\n' '\r']
           | '\\' (['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
                 |['0'-'9'] ['0'-'9'] ['0'-'9']
                 |'x' hexa_char hexa_char) as x) "'"                  { mkCHAR x }
@@ -288,8 +288,8 @@ module Make (Loc : LOC)
       { if quotations c then with_curr_loc maybe_quotation_colon c
         else parse (symbolchar_star "<:") c                                     }
     | "#" [' ' '\t']* (['0'-'9']+ as num) [' ' '\t']*
-          ("\"" ([^ '\010' '\013' '"' ] * as name) "\"")?
-          [^ '\010' '\013'] * newline
+          ("\"" ([^ '\n' '\r' '"' ] * as name) "\"")?
+          [^ '\n' '\r']* newline
       { let inum = int_of_string num
         in update_loc c name inum true 0; LINE_DIRECTIVE(inum, name)            }
     | '(' (not_star_symbolchar as op) ')'
@@ -336,7 +336,7 @@ module Make (Loc : LOC)
     | "'''"                                             { store_parse comment c }
     | "'" newline "'"
       { update_loc c None 1 false 1; store_parse comment c                      }
-    | "'" [^ '\\' '\'' '\010' '\013' ] "'"              { store_parse comment c }
+    | "'" [^ '\\' '\'' '\n' '\r' ] "'"                  { store_parse comment c }
     | "'\\" ['\\' '"' '\'' 'n' 't' 'b' 'r' ' '] "'"     { store_parse comment c }
     | "'\\" ['0'-'9'] ['0'-'9'] ['0'-'9'] "'"           { store_parse comment c }
     | "'\\" 'x' hexa_char hexa_char "'"                 { store_parse comment c }
