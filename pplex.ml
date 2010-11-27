@@ -78,8 +78,8 @@ let main () =
   let () = Lex.setup_loc lexbuf loc in
   let strm = Lex.from_lexbuf ~quotations ~antiquotations lexbuf in
   let show_token_nl x = print_string (show_token x); print_char '\n' in
-  let print_token x = print_string (token_to_string x) in
-  let exn_to_string = function
+  let print_token x = print_string (string_of_token x) in
+  let string_of_exn = function
     | Lex.Error err   -> Lex.string_of_error err
     | PPLexParseError -> "Unexpected token"
     | exn             -> Printexc.to_string exn
@@ -89,7 +89,7 @@ let main () =
                 (drop_locs (if reverse then unparse_tokens strm else strm))
   with
     Loc.Exc_located(loc, exn) ->
-      Printf.eprintf "Error: %s: %s\n%!" (Loc.to_string loc) (exn_to_string exn)
+      Printf.eprintf "Error: %s: %s\n%!" (Loc.to_string loc) (string_of_exn exn)
 ;;
 
 main ()

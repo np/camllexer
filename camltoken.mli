@@ -84,7 +84,7 @@ val mkINT64 : string -> caml_token
 val mkNATIVEINT : string -> caml_token
 val mkFLOAT : string -> caml_token
 
-val quotation_to_string : quotation -> string
+val string_of_quotation : quotation -> string
 
 (** Display a caml token in caml lexical syntax.
 
@@ -94,7 +94,7 @@ val quotation_to_string : quotation -> string
       CHAR('\n', "\\n")         -> "'\n'"
       STRING("f\"o", "f\\\"o")  -> "\"f\\\"o\""
  *)
-val token_to_string : caml_token -> string
+val string_of_token : caml_token -> string
 
 (** Turns a caml token in a pair of a name and a list of
     arguments.

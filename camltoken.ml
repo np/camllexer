@@ -52,7 +52,7 @@ and newline = LF | CR | CRLF
 
 let sf = Printf.sprintf
 
-let quotation_to_string {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
+let string_of_quotation {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
   let locname = if l = "" then "" else sf "@%s" l in
   if n = "" then sf "<%s<%s>>" locname s
   else sf "<:%s%s<%s>>" n locname s
@@ -69,12 +69,12 @@ let blanks = for_all blank
 
 let no_newline = for_all (fun c -> not (newline c))
 
-let newline_to_string = function
+let string_of_newline = function
   | LF   -> "\n"
   | CR   -> "\r"
   | CRLF -> "\r\n"
 
-let psymbol_to_string pre_blanks op post_blanks =
+let string_of_psymbol pre_blanks op post_blanks =
   assert (op <> "");
   assert (blanks pre_blanks);
   assert (blanks post_blanks);
@@ -83,7 +83,7 @@ let psymbol_to_string pre_blanks op post_blanks =
   in
   sf "(%s%s%s)" pre_blanks op post_blanks
 
-let token_to_string = function
+let string_of_token = function
   | KEYWORD       s      |
     SYMBOL        s      |
     LIDENT        s      |
@@ -95,7 +95,7 @@ let token_to_string = function
 
   | LABEL         s      -> sf "~%s:" s
   | OPTLABEL      s      -> sf "?%s:" s
-  | PSYMBOL       (x,y,z)-> psymbol_to_string x y z
+  | PSYMBOL       (x,y,z)-> string_of_psymbol x y z
   | INT32         (_, s) -> sf "%sl" s
   | INT64         (_, s) -> sf "%sL" s
   | NATIVEINT     (_, s) -> sf "%sn" s
@@ -108,8 +108,8 @@ let token_to_string = function
 
   | ANTIQUOT     ("", c) -> sf "$%s$" c
   | ANTIQUOT      (n, c) -> sf "$%s:%s$" n c
-  | QUOTATION     q -> quotation_to_string q
-  | NEWLINE nl      -> newline_to_string nl
+  | QUOTATION     q -> string_of_quotation q
+  | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
   | LINE_DIRECTIVE (bl1, i, bl2, sopt, com) ->
       assert (blanks bl1);
@@ -140,7 +140,7 @@ let strings_of_token = function
                                        string_of_int x.q_shift; x.q_contents])
   | COMMENT s        -> ("COMMENT", [s])
   | BLANKS s         -> ("BLANKS", [s])
-  | NEWLINE nl       -> ("NEWLINE", [newline_to_string nl])
+  | NEWLINE nl       -> ("NEWLINE", [string_of_newline nl])
   | EOI              -> ("EOI", [])
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
   | LINE_DIRECTIVE(bl1, i, bl2, sopt, com) ->
