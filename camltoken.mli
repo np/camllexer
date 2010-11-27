@@ -16,41 +16,62 @@
  * - Nicolas Pouillard: initial version
  *)
 
+(** A general convention about the constructors of this data type is to keep
+    both the parsed value and the original string representation. For instance
+    for int literals, `00000042' will represented by INT (42, "00000042"). *)
+type caml_token =
+  | KEYWORD of string (** Commonly used for words like `let', `open'... *)
+  | LIDENT of string  (** Lower-case identifiers like `foo', `bar42'... *)
+  | UIDENT of string  (** Upper-case identifiers like `Foo', `Bar42'... *)
+  | SYMBOL of string  (** Symbol-based identifiers like `*', `++/--'... *)
+  | PSYMBOL of blanks * string * blanks
+                      (** Parenthesized (or prefix) symbol-based
+                          identifiers like `(+)', `( * )', `( */)'...   *)
+  | INT of int * string
+                      (** Caml int literal like `0', `0xAF', `4_2'...  *)
+  | INT32 of int32 * string
+                      (** Caml int32 literal like int but with a `l' suffix *)
+  | INT64 of int64 * string
+                      (** Caml int64 literal like int but with a `L' suffix *)
+  | NATIVEINT of nativeint * string
+                      (** Caml nativeint literal like int but with a `n' suffix *)
+  | FLOAT of float * string
+                      (** Caml float literal like `0.42', `12e+23', `0.1e-15'... *)
+  | CHAR of char * string
+                      (** Caml char literal like `'x'', `'\n'', `\xAF'... *)
+  | STRING of string * string
+                      (** Caml string literal like `"bla"', `"a\n\xAF"'... *)
+  | LABEL of string
+                      (** Caml label like `~foo:', `~bar:'... *)
+  | OPTLABEL of string
+                      (** Caml optional label like `?foo:', `?bar:'... *)
+  | QUOTATION of quotation
+                      (** Caml(p4) quotations like `<<bla>>', `<:foo<bar>>'... *)
+  | ANTIQUOT of string * string
+                      (** Caml(p4) anti-quotations like `$bla$', `$foo:bar$'... *)
+  | COMMENT of string
+                      (** Caml comments like `(* foo *)'... *)
+  | BLANKS of blanks
+                      (** Caml blanks like spaces, tabulations... *)
+  | NEWLINE
+                      (** Caml new lines: `\n', `\r', or `\r\n'. *)
+  | LINE_DIRECTIVE of int * string option
+                      (** Caml line directives `# 42', `# 2 "bla"' *)
+  | EOI
+                      (** End of input *)
+
 (** The generic quotation type.
     To see how fields are used here is an example:
        <:q_name@q_loc<q_contents>>
     The last one, q_shift is equal to the length of "<:q_name@q_loc<". *)
-type quotation = {
+and quotation = {
   q_name : string;
   q_loc : string;
   q_shift : int;
   q_contents : string;
 }
 
-type blanks = string
-
-type caml_token =
-  | KEYWORD of string
-  | LIDENT of string
-  | UIDENT of string
-  | SYMBOL of string
-  | PSYMBOL of blanks * string * blanks
-  | INT of int * string
-  | INT32 of int32 * string
-  | INT64 of int64 * string
-  | NATIVEINT of nativeint * string
-  | FLOAT of float * string
-  | CHAR of char * string
-  | STRING of string * string
-  | LABEL of string
-  | OPTLABEL of string
-  | QUOTATION of quotation
-  | ANTIQUOT of string * string
-  | COMMENT of string
-  | BLANKS of blanks
-  | NEWLINE
-  | LINE_DIRECTIVE of int * string option
-  | EOI
+and blanks = string
 
 val mkCHAR : string -> caml_token
 val mkSTRING : string -> caml_token
