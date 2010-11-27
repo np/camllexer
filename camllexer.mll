@@ -163,6 +163,10 @@ module Make (Loc : LOC)
   let warn error loc =
     Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) (string_of_error error)
 
+  let warn_comment_not_end lexbuf op =
+    if op <> "" && op.[String.length op - 1] = '*' then
+      warn Comment_not_end (Loc.of_lexbuf lexbuf)
+
   }
 
   let newline = ('\n' | '\r' | "\r\n")
@@ -271,9 +275,6 @@ module Make (Loc : LOC)
     | "(*)"
         { warn Comment_start (Loc.of_lexbuf lexbuf)                             ;
           parse comment (in_comment c); COMMENT (buff_contents c)               }
-    | "*)"
-        { warn Comment_not_end (Loc.of_lexbuf lexbuf)                           ;
-          move_start_p (-1) c; SYMBOL "*"                                       }
     | "<<" (quotchar* as beginning)
       { if quotations c
         then (move_start_p (-String.length beginning) c;
@@ -297,12 +298,14 @@ module Make (Loc : LOC)
                                       LINE_DIRECTIVE(bl1, inum, bl2, name, com) }
     | '(' (not_star_symbolchar as op) ')'
                                            { PSYMBOL ("", String.make 1 op, "") }
-    | '(' (not_star_symbolchar symbolchar* not_star_symbolchar as op) ')'
-                                                         { PSYMBOL ("", op, "") }
+    | '(' (not_star_symbolchar symbolchar* as op) ')'
+                                               { warn_comment_not_end lexbuf op ;
+                                                           PSYMBOL ("", op, "") }
     | '(' (not_star_symbolchar symbolchar* as op) (blank+ as bl) ')'
                                                          { PSYMBOL ("", op, bl) }
-    | '(' (blank+ as bl) (symbolchar* not_star_symbolchar as op) ')'
-                                                         { PSYMBOL (bl, op, "") }
+    | '(' (blank+ as bl) (symbolchar+ as op) ')'
+                                               { warn_comment_not_end lexbuf op ;
+                                                           PSYMBOL (bl, op, "") }
     | '(' (blank+ as pbl) (symbolchar+ as op) (blank+ as sbl) ')'
                                                        { PSYMBOL (pbl, op, sbl) }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"

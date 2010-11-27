@@ -74,16 +74,12 @@ let newline_to_string = function
   | CR   -> "\r"
   | CRLF -> "\r\n"
 
-let escaped_ident_to_string pre_blanks op post_blanks =
+let psymbol_to_string pre_blanks op post_blanks =
   assert (op <> "");
   assert (blanks pre_blanks);
   assert (blanks post_blanks);
   let pre_blanks =
     if pre_blanks = "" && op.[0] = '*' then " " else pre_blanks
-  in
-  let post_blanks =
-    if post_blanks = "" && op.[String.length op - 1] = '*'
-    then " " else post_blanks
   in
   sf "(%s%s%s)" pre_blanks op post_blanks
 
@@ -99,7 +95,7 @@ let token_to_string = function
 
   | LABEL         s      -> sf "~%s:" s
   | OPTLABEL      s      -> sf "?%s:" s
-  | PSYMBOL       (x,y,z)-> escaped_ident_to_string x y z
+  | PSYMBOL       (x,y,z)-> psymbol_to_string x y z
   | INT32         (_, s) -> sf "%sl" s
   | INT64         (_, s) -> sf "%sL" s
   | NATIVEINT     (_, s) -> sf "%sn" s
