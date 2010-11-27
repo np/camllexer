@@ -4,8 +4,9 @@ The lexer has been extracted from the Camlp4 (> 3.10) lexer, which in turns
 was reimplemented as a derivative of the lexer from the compiler.
 
 This lexer has the following particularities:
-* Correct and complete: as far as testing gone (~800_000 distinct
-  lines over ~3_000_000 lines of OCaml like files).
+
+* Correct and complete: as far as testing gone (~800\_000 distinct
+  lines over ~3\_000\_000 lines of OCaml like files).
 * Supports most OCaml dialects:
   * By re-using the lexer of Camlp4 this lexer works on any
     extension of the OCaml language made with Camlp4.
