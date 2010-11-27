@@ -92,13 +92,13 @@ let token_to_string = function
     SYMBOL        s      |
     LIDENT        s      |
     UIDENT        s      |
-    LABEL         s      |
-    OPTLABEL      s      |
     COMMENT       s      |
     INT           (_, s) |
     FLOAT         (_, s) |
     BLANKS        s -> s
 
+  | LABEL         s      -> sf "~%s:" s
+  | OPTLABEL      s      -> sf "?%s:" s
   | PSYMBOL       (x,y,z)-> escaped_ident_to_string x y z
   | INT32         (_, s) -> sf "%sl" s
   | INT64         (_, s) -> sf "%sL" s

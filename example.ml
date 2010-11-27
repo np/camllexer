@@ -1,6 +1,6 @@
 (* COMMENT, SYMBOL, LIDENT, INT, BLANKS, NEWLINE *)
 let x  =  42
-(* UIDENT, ESCAPED_IDENT, INT32, INT64, NATIVEINT, CHAR, STRING *)
+(* UIDENT, PSYMBOL, INT32, INT64, NATIVEINT, CHAR, STRING *)
 let (Some (+)) = Some (42l, 42L, 42n, 4.2, '?', '\'', '\n',
                        "string", "\t\n\"'", "
 ",'
@@ -9,7 +9,7 @@ let (Some (+)) = Some (42l, 42L, 42n, 4.2, '?', '\'', '\n',
 # 42
 # 42 "somefilename.ml"
 (* LABEL, OPTLABEL *)
-let f ~x ?y = (x, y)
+let f g x y = g ~x:x ?y:y
 (* QUOTATION *)
 <<foo>> <:bar<baz>> <<foo$bar$baz>> <:bar<foo$bar$baz>>
 <@loca<foo>> <:expr@loc<foo>> <<abc<:def<ghi>>klm>>
