@@ -45,7 +45,7 @@ type caml_token =
   | COMMENT       of comment
   | BLANKS        of blanks
   | NEWLINE       of newline
-  | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
+  | LINE_DIRECTIVE of blanks * int * blanks * string option * comment * newline
   | ERROR         of string * error
   | EOI
 
@@ -164,15 +164,16 @@ let string_of_token = function
   | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
   | ERROR (tok, _)  -> tok
-  | LINE_DIRECTIVE (bl1, i, bl2, sopt, com) ->
+  | LINE_DIRECTIVE (bl1, i, bl2, sopt, com, nl) ->
       assert (blanks bl1);
       assert (blanks bl2);
       assert (no_newline com);
+      let nl = string_of_newline nl in
       match sopt with
       | Some s ->
-          sf "#%s%d%s\"%s\"%s\n" bl1 i bl2 s com
+          sf "#%s%d%s\"%s\"%s%s" bl1 i bl2 s com nl
       | None ->
-          sf "#%s%d%s%s\n" bl1 i bl2 com
+          sf "#%s%d%s%s%s" bl1 i bl2 com nl
 
 let strings_of_token = function
   | KEYWORD s        -> ("KEYWORD", [s])
@@ -197,10 +198,11 @@ let strings_of_token = function
   | EOI              -> ("EOI", [])
   | ERROR (tok, err) -> ("ERROR", tok :: let (x,xs) = show_error err in x :: xs)
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
-  | LINE_DIRECTIVE(bl1, i, bl2, sopt, com) ->
+  | LINE_DIRECTIVE(bl1, i, bl2, sopt, com, nl) ->
+      let nl = string_of_newline nl in
       match sopt with
-      | None   -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; com])
-      | Some s -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; s; com])
+      | None   -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; com; nl])
+      | Some s -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; s; com; nl])
 
 let show_token t =
   let (name, args) = strings_of_token t in
@@ -284,12 +286,24 @@ let mkNATIVEINT  s = try  NATIVEINT(Nativeint.of_string s, s)
 let mkFLOAT      s = try  FLOAT(float_of_string s, s)
                      with Failure _ -> literal_overflow s "float"
 
+let newline_of_string = function
+  | "\n"   -> LF
+  | "\r"   -> CR
+  | "\r\n" -> CRLF
+  | _      -> invalid_arg "newline_of_string"
+
 (* not exported *)
-let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?s ?(com="") i =
+let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?s ?(com="") ?(nl="\n") i =
   assert (blanks bl1);
   assert (blanks bl2);
   assert (no_newline com);
-  LINE_DIRECTIVE(bl1, int_of_string i, bl2, s, com)
+  let nl = match nl with
+    | "\n" -> LF
+    | "\r" -> CR
+    | "\r\n" -> CRLF
+    | _ -> assert false
+  in
+  LINE_DIRECTIVE(bl1, int_of_string i, bl2, s, com, nl)
 
 let token_of_strings = function
   | "KEYWORD", [s]           -> Some (KEYWORD s)
@@ -341,8 +355,8 @@ let token_of_strings = function
       | [i]                  -> Some (mkLINE_DIRECTIVE i)
       | [i; s]               -> Some (mkLINE_DIRECTIVE ~s i)
 
-      | [bl1; i; bl2; com]   -> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~com i)
-      | [bl1; i; bl2; s; com]-> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~s ~com i)
+      | [bl1;i;bl2;com;nl]   -> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~com ~nl i)
+      | [bl1;i;bl2;s;com;nl] -> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~s ~com ~nl i)
       | _                    -> None
       end
   | _                        -> None

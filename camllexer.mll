@@ -255,10 +255,11 @@ module Make (Loc : LOC)
         else parse (symbolchar_star "<:") c                                     }
     | "#" ([' ' '\t']* as bl1) (['0'-'9']+ as num) ([' ' '\t']* as bl2)
           ("\"" ([^ '\n' '\r' '"' ] * as name) "\"")?
-          ([^ '\n' '\r']* as com) newline
-                                    { let inum = int_of_string num in
-                                      update_loc c name inum true 0;
-                                      LINE_DIRECTIVE(bl1, inum, bl2, name, com) }
+          ([^ '\n' '\r']* as com) (newline as nl)
+                                { let inum = int_of_string num in
+                                  let nl = newline_of_string nl in
+                                  update_loc c name inum true 0;
+                                  LINE_DIRECTIVE(bl1, inum, bl2, name, com, nl) }
     | '(' (not_star_symbolchar as op) ')'
                                            { PSYMBOL ("", String.make 1 op, "") }
     | '(' (not_star_symbolchar symbolchar* as op) ')'
