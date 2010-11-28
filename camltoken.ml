@@ -311,15 +311,27 @@ end
 
 let literal_overflow tok ty = ERROR (tok, Literal_overflow ty)
 
+(* To convert integer literals, allowing max_int + 1 (PR#4210) *)
+
+let cvt_int_literal s =
+  - int_of_string ("-" ^ s)
+let cvt_int32_literal s =
+  Int32.neg (Int32.of_string ("-" ^ String.sub s 0 (String.length s - 1)))
+let cvt_int64_literal s =
+  Int64.neg (Int64.of_string ("-" ^ String.sub s 0 (String.length s - 1)))
+let cvt_nativeint_literal s =
+  Nativeint.neg (Nativeint.of_string ("-" ^ String.sub s 0 (String.length s - 1)))
+
+
 let mkCHAR       s = CHAR(Eval.char s, s)
 let mkSTRING     s = STRING(Eval.string s, s)
-let mkINT        s = try  INT(int_of_string s, s)
+let mkINT        s = try  INT(cvt_int_literal s, s)
                      with Failure _ -> literal_overflow s "int"
-let mkINT32      s = try  INT32(Int32.of_string s, s)
+let mkINT32      s = try  INT32(cvt_int32_literal s, s)
                      with Failure _ -> literal_overflow (s^"l") "int32"
-let mkINT64      s = try  INT64(Int64.of_string s, s)
+let mkINT64      s = try  INT64(cvt_int64_literal s, s)
                      with Failure _ -> literal_overflow (s^"L")"int64"
-let mkNATIVEINT  s = try  NATIVEINT(Nativeint.of_string s, s)
+let mkNATIVEINT  s = try  NATIVEINT(cvt_nativeint_literal s, s)
                      with Failure _ -> literal_overflow (s^"n") "nativeint"
 let mkFLOAT      s = try  FLOAT(float_of_string s, s)
                      with Failure _ -> literal_overflow s "float"
