@@ -1,7 +1,7 @@
 #!/bin/bash
 
 testname='illegal-esc-tolerance.t'
-command='/home/np/w/a/camllexer/_build/pplex.byte'
+command="$PPLEX"
 args=( '-f' '-s' '-' )
 exit_code='0'
 stdin_file='stdin'
