@@ -1,0 +1,10 @@
+#!/bin/bash -e
+input="$(mktemp --suffix .ml)"
+dd if=/dev/urandom of="$input" count=1 bs="$1" 2>/dev/null
+lex=${PPLEX:-$(dirname $0)/../pplex.byte}
+if "$lex" -f "$input" | cmp "$input" /dev/stdin; then
+  rm "$input"
+else
+  echo "Failed on $input"
+  exit 1
+fi
