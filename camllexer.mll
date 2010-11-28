@@ -253,13 +253,19 @@ module Make (Loc : LOC)
     | "<:"
       { if quotations c then with_curr_loc maybe_quotation_colon c
         else parse (symbolchar_star "<:") c                                     }
-    | "#" ([' ' '\t']* as bl1) (['0'-'9']+ as num) ([' ' '\t']* as bl2)
-          ("\"" ([^ '\n' '\r' '"' ] * as name) "\"")?
+    | "#" ([' ' '\t']* as bl1) ('0'* as zeros) ('0' | ['1'-'9']['0'-'9']* as num)
+          ([' ' '\t']* as bl2) ("\"" ([^ '\n' '\r' '"' ] * as name) "\"")?
           ([^ '\n' '\r']* as com) (newline as nl)
                                 { let inum = int_of_string num in
                                   let nl = newline_of_string nl in
                                   update_loc c name inum true 0;
-                                  LINE_DIRECTIVE(bl1, inum, bl2, name, com, nl) }
+                                  LINE_DIRECTIVE{l_blanks1=bl1;
+                                                 l_zeros=String.length zeros;
+                                                 l_linenum=inum;
+                                                 l_blanks2=bl2;
+                                                 l_filename=name;
+                                                 l_comment=com;
+                                                 l_newline=nl} }
     | '(' (not_star_symbolchar as op) ')'
                                            { PSYMBOL ("", String.make 1 op, "") }
     | '(' (not_star_symbolchar symbolchar* as op) ')'

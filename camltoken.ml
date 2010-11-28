@@ -45,7 +45,7 @@ type caml_token =
   | COMMENT       of comment
   | BLANKS        of blanks
   | NEWLINE       of newline
-  | LINE_DIRECTIVE of blanks * int * blanks * string option * comment * newline
+  | LINE_DIRECTIVE of line_directive
   | ERROR         of string * error
   | EOI
 
@@ -67,6 +67,16 @@ and unterminated =
   | Ustring_in_comment
   | Uquotation
   | Uantiquot
+
+and line_directive = {
+  l_blanks1  : blanks;
+  l_zeros    : int;
+  l_linenum  : int;
+  l_blanks2  : blanks;
+  l_filename : string option;
+  l_comment  : comment;
+  l_newline  : newline
+}
 
 let sf = Printf.sprintf
 
@@ -135,6 +145,19 @@ let string_of_psymbol pre_blanks op post_blanks =
   in
   sf "(%s%s%s)" pre_blanks op post_blanks
 
+let string_of_line_directive x =
+  assert (blanks x.l_blanks1);
+  assert (blanks x.l_blanks2);
+  assert (x.l_zeros >= 0);
+  assert (no_newline x.l_comment);
+  let nl = string_of_newline x.l_newline in
+  let zeros = String.make x.l_zeros '0' in
+  match x.l_filename with
+  | Some s ->
+      sf "#%s%s%d%s\"%s\"%s%s" x.l_blanks1 zeros x.l_linenum x.l_blanks2 s x.l_comment nl
+  | None ->
+      sf "#%s%s%d%s%s%s" x.l_blanks1 zeros x.l_linenum x.l_blanks2 x.l_comment nl
+
 let string_of_token = function
   | KEYWORD       s      |
     SYMBOL        s      |
@@ -164,16 +187,7 @@ let string_of_token = function
   | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
   | ERROR (tok, _)  -> tok
-  | LINE_DIRECTIVE (bl1, i, bl2, sopt, com, nl) ->
-      assert (blanks bl1);
-      assert (blanks bl2);
-      assert (no_newline com);
-      let nl = string_of_newline nl in
-      match sopt with
-      | Some s ->
-          sf "#%s%d%s\"%s\"%s%s" bl1 i bl2 s com nl
-      | None ->
-          sf "#%s%d%s%s%s" bl1 i bl2 com nl
+  | LINE_DIRECTIVE ld -> string_of_line_directive ld
 
 let strings_of_token = function
   | KEYWORD s        -> ("KEYWORD", [s])
@@ -198,11 +212,12 @@ let strings_of_token = function
   | EOI              -> ("EOI", [])
   | ERROR (tok, err) -> ("ERROR", tok :: let (x,xs) = show_error err in x :: xs)
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
-  | LINE_DIRECTIVE(bl1, i, bl2, sopt, com, nl) ->
+  | LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=i;l_blanks2=bl2;
+                   l_filename=sopt;l_comment=com;l_newline=nl} ->
       let nl = string_of_newline nl in
       match sopt with
-      | None   -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; com; nl])
-      | Some s -> ("LINE_DIRECTIVE", [bl1; string_of_int i; bl2; s; com; nl])
+      | None   -> ("LINE_DIRECTIVE", [bl1; string_of_int zeros; string_of_int i; bl2; com; nl])
+      | Some s -> ("LINE_DIRECTIVE", [bl1; string_of_int zeros; string_of_int i; bl2; s; com; nl])
 
 let show_token t =
   let (name, args) = strings_of_token t in
@@ -315,17 +330,19 @@ let newline_of_string = function
   | _      -> invalid_arg "newline_of_string"
 
 (* not exported *)
-let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?s ?(com="") ?(nl="\n") i =
+let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?(zeros="0") ?s ?(com="") ?(nl="\n") i =
   assert (blanks bl1);
   assert (blanks bl2);
   assert (no_newline com);
+  let zeros = int_of_string zeros in
   let nl = match nl with
     | "\n" -> LF
     | "\r" -> CR
     | "\r\n" -> CRLF
     | _ -> assert false
   in
-  LINE_DIRECTIVE(bl1, int_of_string i, bl2, s, com, nl)
+  LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=int_of_string i;
+                 l_blanks2=bl2;l_filename=s;l_comment=com;l_newline=nl}
 
 let token_of_strings = function
   | "KEYWORD", [s]           -> Some (KEYWORD s)
@@ -377,8 +394,8 @@ let token_of_strings = function
       | [i]                  -> Some (mkLINE_DIRECTIVE i)
       | [i; s]               -> Some (mkLINE_DIRECTIVE ~s i)
 
-      | [bl1;i;bl2;com;nl]   -> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~com ~nl i)
-      | [bl1;i;bl2;s;com;nl] -> Some (mkLINE_DIRECTIVE ~bl1 ~bl2 ~s ~com ~nl i)
+      | [bl1;zeros;i;bl2;com;nl]   -> Some (mkLINE_DIRECTIVE ~bl1 ~zeros ~bl2 ~com ~nl i)
+      | [bl1;zeros;i;bl2;s;com;nl] -> Some (mkLINE_DIRECTIVE ~bl1 ~zeros ~bl2 ~s ~com ~nl i)
       | _                    -> None
       end
   | _                        -> None
