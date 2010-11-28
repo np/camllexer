@@ -1,0 +1,4 @@
+LIDENT "foo"
+ERROR "\169" "Illegal_character" "\\169"
+LIDENT "bar"
+NEWLINE "\n"

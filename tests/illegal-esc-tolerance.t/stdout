@@ -1,0 +1,7 @@
+LIDENT "bla"
+BLANKS " "
+ERROR "'\\f" "Illegal_escape" "f"
+SYMBOL "'"
+BLANKS " "
+INT "42"
+NEWLINE "\n"
