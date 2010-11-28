@@ -46,11 +46,65 @@ type caml_token =
   | BLANKS        of blanks
   | NEWLINE       of newline
   | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
+  | ERROR         of error
   | EOI
 
 and newline = LF | CR | CRLF
 
+and error =
+  | Illegal_character of char
+  | Illegal_escape    of string
+  | Unterminated      of unterminated
+  | Literal_overflow  of string
+(*
+  | Comment_start
+  | Comment_not_end
+*)
+
+and unterminated =
+  | Ucomment
+  | Ustring
+  | Ustring_in_comment
+  | Uquotation
+  | Uantiquot
+
+exception Error of error
+
 let sf = Printf.sprintf
+
+let string_of_unterminated =
+  function
+  | Ucomment           -> "Comment not terminated"
+  | Ustring            -> "String literal not terminated"
+  | Ustring_in_comment -> "This comment contains an unterminated string literal"
+  | Uquotation         -> "Quotation not terminated"
+  | Uantiquot          -> "Antiquotation not terminated"
+
+let string_of_error =
+  function
+  | Illegal_character c ->
+      sf "Illegal character (%s)" (Char.escaped c)
+  | Illegal_escape s ->
+      sf "Illegal backslash escape in string or character (%s)" s
+  | Unterminated u ->
+      string_of_unterminated u
+  | Literal_overflow ty ->
+      sf "Integer literal exceeds the range of representable integers of type %s" ty
+
+let show_unterminated =
+  function
+  | Ucomment           -> "Ucomment"
+  | Ustring            -> "Ustring"
+  | Ustring_in_comment -> "Ustring_in_comment"
+  | Uquotation         -> "Uquotation"
+  | Uantiquot          -> "Uantiquot"
+
+let show_error =
+  function
+  | Illegal_character c -> ("Illegal_character", [Char.escaped c])
+  | Illegal_escape s    -> ("Illegal_escape",    [s])
+  | Unterminated u      -> ("Unterminated",      [show_unterminated u])
+  | Literal_overflow ty -> ("Literal_overflow",  [ty])
 
 let string_of_quotation {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
   let locname = if l = "" then "" else sf "@%s" l in
@@ -111,6 +165,7 @@ let string_of_token = function
   | QUOTATION     q -> string_of_quotation q
   | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
+  | ERROR err       -> raise (Error err)
   | LINE_DIRECTIVE (bl1, i, bl2, sopt, com) ->
       assert (blanks bl1);
       assert (blanks bl2);
@@ -127,8 +182,8 @@ let strings_of_token = function
   | LIDENT s         -> ("LIDENT", [s])
   | UIDENT s         -> ("UIDENT", [s])
   | INT(_, s)        -> ("INT", [s])
-  | INT32(_, s)      -> ("INT32", [s]) 
-  | INT64(_, s)      -> ("INT64", [s]) 
+  | INT32(_, s)      -> ("INT32", [s])
+  | INT64(_, s)      -> ("INT64", [s])
   | NATIVEINT(_, s)  -> ("NATIVEINT", [s])
   | FLOAT(_, s)      -> ("FLOAT", [s])
   | CHAR(_, s)       -> ("CHAR", [s])
@@ -142,6 +197,7 @@ let strings_of_token = function
   | BLANKS s         -> ("BLANKS", [s])
   | NEWLINE nl       -> ("NEWLINE", [string_of_newline nl])
   | EOI              -> ("EOI", [])
+  | ERROR err        -> ("ERROR", let (x,xs) = show_error err in x :: xs)
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
   | LINE_DIRECTIVE(bl1, i, bl2, sopt, com) ->
       match sopt with
@@ -215,13 +271,20 @@ module Eval = struct
 
 end
 
+let literal_overflow ty = ERROR (Literal_overflow ty)
+
 let mkCHAR       s = CHAR(Eval.char s, s)
 let mkSTRING     s = STRING(Eval.string s, s)
-let mkINT        s = INT(int_of_string s, s)
-let mkINT32      s = INT32(Int32.of_string s, s) 
-let mkINT64      s = INT64(Int64.of_string s, s) 
-let mkNATIVEINT  s = NATIVEINT(Nativeint.of_string s, s)
-let mkFLOAT      s = FLOAT(float_of_string s, s)
+let mkINT        s = try  INT(int_of_string s, s)
+                     with Failure _ -> literal_overflow "int"
+let mkINT32      s = try  INT32(Int32.of_string s, s)
+                     with Failure _ -> literal_overflow "int32"
+let mkINT64      s = try  INT64(Int64.of_string s, s)
+                     with Failure _ -> literal_overflow "int64"
+let mkNATIVEINT  s = try  NATIVEINT(Nativeint.of_string s, s)
+                     with Failure _ -> literal_overflow "nativeint"
+let mkFLOAT      s = try  FLOAT(float_of_string s, s)
+                     with Failure _ -> literal_overflow "float"
 
 (* not exported *)
 let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?s ?(com="") i =
@@ -236,8 +299,8 @@ let token_of_strings = function
   | "LIDENT", [s]            -> Some (LIDENT s)
   | "UIDENT", [s]            -> Some (UIDENT s)
   | "INT", [s]               -> Some (mkINT s)
-  | "INT32", [s]             -> Some (mkINT32 s) 
-  | "INT64", [s]             -> Some (mkINT64 s) 
+  | "INT32", [s]             -> Some (mkINT32 s)
+  | "INT64", [s]             -> Some (mkINT64 s)
   | "NATIVEINT", [s]         -> Some (mkNATIVEINT s)
   | "FLOAT", [s]             -> Some (mkFLOAT s)
   | "CHAR", [s]              -> Some (mkCHAR s)
@@ -255,6 +318,23 @@ let token_of_strings = function
   | "NEWLINE", ["\r"]        -> Some (NEWLINE CR)
   | "NEWLINE", ["\r\n"]      -> Some (NEWLINE CRLF)
   | "EOI", []                -> Some EOI
+  | "ERROR", (x :: xs) ->
+      (* Don't you see this code crying for the option monad? *)
+      begin match x, xs with
+      | "Illegal_character", [c] -> Some (ERROR (Illegal_character (Eval.char c)))
+      | "Illegal_escape",    [s] -> Some (ERROR (Illegal_escape s))
+      | "Literal_overflow",  [t] -> Some (ERROR (Literal_overflow t))
+      | "Unterminated",      [u] ->
+          begin match u with
+          | "Ucomment"           -> Some (ERROR (Unterminated Ucomment))
+          | "Ustring"            -> Some (ERROR (Unterminated Ustring))
+          | "Ustring_in_comment" -> Some (ERROR (Unterminated Ustring_in_comment))
+          | "Uquotation"         -> Some (ERROR (Unterminated Uquotation))
+          | "Uantiquot"          -> Some (ERROR (Unterminated Uantiquot))
+          | _                    -> None
+          end
+      | _ -> None
+      end
   | "PSYMBOL", [x; y; z]     -> Some (PSYMBOL (x,y,z))
   | "LINE_DIRECTIVE", xs     ->
       begin match xs with

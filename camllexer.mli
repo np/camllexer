@@ -30,19 +30,6 @@ module type LOC = sig
   val raise : t -> exn -> 'a
 end
 module Make : functor (Loc : LOC) -> sig
-  type error =
-    | Illegal_character of char
-    | Illegal_escape of string
-    | Unterminated_comment
-    | Unterminated_string
-    | Unterminated_quotation
-    | Unterminated_antiquot
-    | Unterminated_string_in_comment
-    | Comment_start
-    | Comment_not_end
-    | Literal_overflow of string
-  exception Error of error
-  val string_of_error : error -> string
   val from_lexbuf :
     quotations:bool ->
     antiquotations:bool ->

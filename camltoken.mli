@@ -57,6 +57,8 @@ type caml_token =
                       (** Caml new lines: `\n', `\r', or `\r\n'. *)
   | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
                       (** Caml line directives `# 42', `# 2 "bla"' *)
+  | ERROR of error
+                      (** Represent an error found in the input stream *)
   | EOI
                       (** End of input *)
 
@@ -76,6 +78,21 @@ and comment = string
 
 and newline = LF | CR | CRLF
 
+and error =
+  | Illegal_character of char
+  | Illegal_escape    of string
+  | Unterminated      of unterminated
+  | Literal_overflow  of string
+
+and unterminated =
+  | Ucomment
+  | Ustring
+  | Ustring_in_comment
+  | Uquotation
+  | Uantiquot
+
+exception Error of error
+
 val mkCHAR : string -> caml_token
 val mkSTRING : string -> caml_token
 val mkINT : string -> caml_token
@@ -87,6 +104,9 @@ val mkFLOAT : string -> caml_token
 val string_of_quotation : quotation -> string
 
 (** Display a caml token in caml lexical syntax.
+
+    Note that this function raises the Error
+    exception on the ERROR keyword.
 
     Examples:
       LIDENT "foo"              -> "foo"
@@ -131,6 +151,8 @@ val token_of_strings : (string * string list) -> caml_token option
         -> LINE_DIRECTIVE "" "42" "" ""
 *)
 val show_token : caml_token -> string
+
+val string_of_error : error -> string
 
 module Eval : sig
   val char : string -> char

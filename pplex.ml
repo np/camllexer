@@ -19,14 +19,10 @@
 open Camltoken
 module Lex = Camllexer.Make(Loc)
 
-let rec drop_locs : (caml_token * Loc.t) Stream.t -> caml_token Stream.t =
+let rec iter_tokens (f : (caml_token * 'a) -> unit) : (caml_token * 'a) Stream.t -> unit =
   parser
-  | [< '(x,_) ; xs >] -> [< 'x; drop_locs xs >]
-  | [<>] -> [<>]
-
-let rec iter_tokens (f : caml_token -> unit) : caml_token Stream.t -> unit =
-  parser
-  | [< 'x ; xs >] -> if x <> EOI then (f x; iter_tokens f xs)
+  | [< '(EOI, _) >] -> ()
+  | [< 'x ; xs >] -> f x; iter_tokens f xs
   | [<>] -> ()
 
 let rec strings =
@@ -77,16 +73,18 @@ let main () =
   let lexbuf = Lexing.from_channel ic in
   let () = Lex.setup_loc lexbuf loc in
   let strm = Lex.from_lexbuf ~quotations ~antiquotations lexbuf in
-  let show_token_nl x = print_string (show_token x); print_char '\n' in
-  let print_token x = print_string (string_of_token x) in
+  let show_token_nl (x, _) = print_string (show_token x); print_char '\n' in
+  let print_token (x, loc) =
+    try print_string (string_of_token x)
+    with Error _ as exn -> Loc.raise loc exn in
   let string_of_exn = function
-    | Lex.Error err   -> Lex.string_of_error err
+    | Error err       -> string_of_error err
     | PPLexParseError -> "Unexpected token"
     | exn             -> Printexc.to_string exn
   in
   try
     iter_tokens (if show then show_token_nl else print_token)
-                (drop_locs (if reverse then unparse_tokens strm else strm))
+                (if reverse then unparse_tokens strm else strm)
   with
     Loc.Exc_located(loc, exn) ->
       Printf.eprintf "Error: %s: %s\n%!" (Loc.to_string loc) (string_of_exn exn)

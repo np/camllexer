@@ -44,44 +44,6 @@ module Make (Loc : LOC)
 
   open Lexing
 
-  (* Error report *)
-  type error =
-    | Illegal_character of char
-    | Illegal_escape    of string
-    | Unterminated_comment
-    | Unterminated_string
-    | Unterminated_quotation
-    | Unterminated_antiquot
-    | Unterminated_string_in_comment
-    | Comment_start
-    | Comment_not_end
-    | Literal_overflow of string
-
-  exception Error of error
-
-  let string_of_error =
-    function
-    | Illegal_character c ->
-        sf "Illegal character (%s)" (Char.escaped c)
-    | Illegal_escape s ->
-        sf "Illegal backslash escape in string or character (%s)" s
-    | Unterminated_comment ->
-        "Comment not terminated"
-    | Unterminated_string ->
-        "String literal not terminated"
-    | Unterminated_string_in_comment ->
-        "This comment contains an unterminated string literal"
-    | Unterminated_quotation ->
-        "Quotation not terminated"
-    | Unterminated_antiquot ->
-        "Antiquotation not terminated"
-    | Literal_overflow ty ->
-        sf "Integer literal exceeds the range of representable integers of type %s" ty
-    | Comment_start ->
-        "this is the start of a comment"
-    | Comment_not_end ->
-        "this is not the end of a comment"
-
   (* To store some context information:
   *   loc       : position of the beginning of a string, quotation and comment
   *   in_comment: are we in a comment?
@@ -124,22 +86,28 @@ module Make (Loc : LOC)
     let p = c.lexbuf.lex_start_p in
     c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
 
+  exception UnterminatedExn of unterminated
+
   let update_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
   let with_curr_loc f c = f (update_loc c) c.lexbuf
-  let parse_nested f c =
-    with_curr_loc f c;
-    set_start_p c;
-    buff_contents c
+  let parse_nested f mk c =
+    try
+      with_curr_loc f c;
+      set_start_p c;
+      mk (buff_contents c)
+    with UnterminatedExn u -> ERROR (Unterminated u)
   let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
   let mk_quotation quotation c name loc shift =
-    let s = parse_nested quotation (update_loc c) in
-    let contents = String.sub s 0 (String.length s - 2) in
-    QUOTATION { q_name     = name     ;
-                q_loc      = loc      ;
-                q_shift    = shift    ;
-                q_contents = contents }
+    let mk s =
+      let contents = String.sub s 0 (String.length s - 2) in
+      QUOTATION { q_name     = name     ;
+                  q_loc      = loc      ;
+                  q_shift    = shift    ;
+                  q_contents = contents }
+    in parse_nested quotation mk (update_loc c)
+  let mkCOMMENT x = COMMENT x
 
 
   (* Update the current location with file name and line number. *)
@@ -157,15 +125,21 @@ module Make (Loc : LOC)
       pos_bol = pos.pos_cnum - chars;
     }
 
-  let err error loc =
-    raise(Loc.Exc_located(loc, Error error))
+  let update_chars c chars = update_loc c None 1 false chars
 
-  let warn error loc =
-    Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) (string_of_error error)
+  let illegal_escape s = ERROR (Illegal_escape s)
+  let illegal_character c = ERROR (Illegal_character c)
+  let unterminated u = raise (UnterminatedExn u)
+
+  let warn msg loc =
+    Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) msg
 
   let warn_comment_not_end lexbuf op =
     if op <> "" && op.[String.length op - 1] = '*' then
-      warn Comment_not_end (Loc.of_lexbuf lexbuf)
+      warn "this is not the end of a comment" (Loc.of_lexbuf lexbuf)
+
+  let warn_comment_start lexbuf =
+    warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
 
   }
 
@@ -244,37 +218,24 @@ module Make (Loc : LOC)
     | "?" (lowercase identchar * as x) ':'                         { OPTLABEL x }
     | lowercase identchar * as x                                     { LIDENT x }
     | uppercase identchar * as x                                     { UIDENT x }
-    | int_literal as i
-        { try  mkINT i
-          with Failure _ -> err (Literal_overflow "int") (Loc.of_lexbuf lexbuf) }
-    | float_literal as f
-        { try  mkFLOAT f
-          with Failure _ -> err (Literal_overflow "float") (Loc.of_lexbuf lexbuf) }
-    | (int_literal as i) "l"
-        { try  mkINT32 i
-          with Failure _ -> err (Literal_overflow "int32") (Loc.of_lexbuf lexbuf) }
-    | (int_literal as i) "L"
-        { try  mkINT64 i
-          with Failure _ -> err (Literal_overflow "int64") (Loc.of_lexbuf lexbuf) }
-    | (int_literal as i) "n"
-        { try mkNATIVEINT i
-          with Failure _ -> err (Literal_overflow "nativeint") (Loc.of_lexbuf lexbuf) }
-    | '"'
-        { with_curr_loc string c;
-          let s = buff_contents c in mkSTRING s                                 }
+    | int_literal as i                                                { mkINT i }
+    | float_literal as f                                            { mkFLOAT f }
+    | (int_literal as i) "l"                                        { mkINT32 i }
+    | (int_literal as i) "L"                                        { mkINT64 i }
+    | (int_literal as i) "n"                                    { mkNATIVEINT i }
+    | '"'                  { with_curr_loc string c; mkSTRING (buff_contents c) }
     | "'" (newline as x) "'"
         { update_loc c None 1 false 1; mkCHAR x                                 }
     | "'" ( [^ '\\' '\n' '\r']
           | '\\' (['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
                 |['0'-'9'] ['0'-'9'] ['0'-'9']
                 |'x' hexa_char hexa_char) as x) "'"                  { mkCHAR x }
-    | "'\\" (_ as c)
-        { err (Illegal_escape (String.make 1 c)) (Loc.of_lexbuf lexbuf)         }
+    | "'\\" (_ as c)                         { illegal_escape (String.make 1 c) }
     | "(*"
-        { store c; COMMENT(parse_nested comment (in_comment c))                 }
+                       { store c; parse_nested comment mkCOMMENT (in_comment c) }
     | "(*)"
-        { warn Comment_start (Loc.of_lexbuf lexbuf)                             ;
-          parse comment (in_comment c); COMMENT (buff_contents c)               }
+        { warn_comment_start lexbuf;
+         parse (fun c lb -> comment c lb; COMMENT (buff_contents c)) (in_comment c) }
     | "<<" (quotchar* as beginning)
       { if quotations c
         then (move_start_p (-String.length beginning) c;
@@ -320,7 +281,7 @@ module Make (Loc : LOC)
       { let pos = lexbuf.lex_curr_p in
         lexbuf.lex_curr_p <- { pos with pos_bol  = pos.pos_bol  + 1 ;
                                         pos_cnum = pos.pos_cnum + 1 }; EOI      }
-    | _ as c                 { err (Illegal_character c) (Loc.of_lexbuf lexbuf) }
+    | _ as c                                              { illegal_character c }
 
   and comment c = parse
       "(*"
@@ -333,8 +294,8 @@ module Make (Loc : LOC)
     | "\""
         { store c;
           begin try with_curr_loc string c
-          with Loc.Exc_located(_, Error Unterminated_string) ->
-            err Unterminated_string_in_comment (loc c)
+          with Error (Unterminated Ustring) ->
+            raise (Error (Unterminated Ustring_in_comment))
           end;
           Buffer.add_char c.buffer '"';
           parse comment c }
@@ -346,10 +307,9 @@ module Make (Loc : LOC)
     | "'\\" ['\\' '"' '\'' 'n' 't' 'b' 'r' ' '] "'"     { store_parse comment c }
     | "'\\" ['0'-'9'] ['0'-'9'] ['0'-'9'] "'"           { store_parse comment c }
     | "'\\" 'x' hexa_char hexa_char "'"                 { store_parse comment c }
-    | eof
-      { err Unterminated_comment (loc c)                                        }
+    | eof                                               { unterminated Ucomment }
     | newline
-      { update_loc c None 1 false 0; store_parse comment c                      }
+                           { update_loc c None 1 false 0; store_parse comment c }
     | _                                                 { store_parse comment c }
 
   and string c = parse
@@ -364,12 +324,16 @@ module Make (Loc : LOC)
         { if is_in_comment c
           then store_parse string c
           else begin
-            warn (Illegal_escape (String.make 1 x)) (Loc.of_lexbuf lexbuf);
+(*
+            TODO
+*)
+            warn (string_of_error (Illegal_escape (String.make 1 x)))
+                 (Loc.of_lexbuf lexbuf);
             store_parse string c
           end }
     | newline
       { update_loc c None 1 false 0; store_parse string c                       }
-    | eof                                     { err Unterminated_string (loc c) }
+    | eof                                                { unterminated Ustring }
     | _                                                  { store_parse string c }
 
   and symbolchar_star beginning c = parse
@@ -394,7 +358,7 @@ module Make (Loc : LOC)
                                                       with_curr_loc quotation c ;
                                                               parse quotation c }
     | ">>"                                                            { store c }
-    | eof                                  { err Unterminated_quotation (loc c) }
+    | eof                                             { unterminated Uquotation }
     | newline                                     { update_loc c None 1 false 0 ;
                                                         store_parse quotation c }
     | _                                               { store_parse quotation c }
@@ -407,7 +371,7 @@ module Make (Loc : LOC)
 
   and antiquot name c = parse
     | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
-    | eof                                   { err Unterminated_antiquot (loc c) }
+    | eof                                      { ERROR (Unterminated Uantiquot) }
     | newline
       { update_loc c None 1 false 0; store_parse (antiquot name) c              }
     | '<' (':' ident)? ('@' locname)? '<'
