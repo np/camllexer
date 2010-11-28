@@ -218,56 +218,78 @@ module Eval = struct
     else if d >= 65 then d - 55
     else d - 48
 
-  let rec skip_indent = parser
-    | [< ' (' ' | '\t'); s >] -> skip_indent s
-    | [< >] -> ()
+  exception Backtrack
 
-  let skip_opt_linefeed = parser
-    | [< ''\010' >] -> ()
-    | [< >] -> ()
+  let peek s i = if i < String.length s then Some s.[i] else None
+
+  let rec skip_indent s i =
+    match peek s i with
+    | Some (' ' | '\t') -> skip_indent s (i+1)
+    | _ -> i
+
+  let skip_opt_linefeed s i =
+    match peek s i with
+    | Some '\n' -> i + 1
+    | _ -> i
 
   let chr c =
     if c < 0 || c > 255 then failwith "invalid char token" else Char.chr c
 
-  let rec backslash = parser
-    | [< ''\010' >] -> '\010'
-    | [< ''\013' >] -> '\013'
-    | [< ''n' >]  -> '\n'
-    | [< ''r' >]  -> '\r'
-    | [< ''t' >]  -> '\t'
-    | [< ''b' >]  -> '\b'
-    | [< ''\\' >] -> '\\'
-    | [< ''"' >]  -> '"'
-    | [< '  ''' >]  -> '''
-    | [< '' ' >]  -> ' '
-    | [< ' ('0'..'9' as c1); ' ('0'..'9' as c2); ' ('0'..'9' as c3) >] ->
-        chr (100 * (valch c1) + 10 * (valch c2) + (valch c3))
-    | [< ''x'; ' ('0'..'9' | 'a'..'f' | 'A'..'F' as c1) ;
-              ' ('0'..'9' | 'a'..'f' | 'A'..'F' as c2) >] ->
-        chr (16 * (valch_hex c1) + (valch_hex c2))
+  let escaped_char s i = match peek s i with
+    | Some '\n' -> '\n', i + 1
+    | Some '\r' -> '\r', i + 1
+    | Some 'n'  -> '\n', i + 1
+    | Some 'r'  -> '\r', i + 1
+    | Some 't'  -> '\t', i + 1
+    | Some 'b'  -> '\b', i + 1
+    | Some '\\' -> '\\', i + 1
+    | Some '"'  -> '"',  i + 1
+    | Some '\'' -> '\'', i + 1
+    | Some ' '  -> ' ',  i + 1
+    | Some ('0'..'9' as c1) ->
+        begin match peek s (i + 1), peek s (i + 2) with
+        | Some ('0'..'9' as c2), Some ('0'..'9' as c3) ->
+            chr (100 * (valch c1) + 10 * (valch c2) + (valch c3)), i + 3
+        | _ -> raise Backtrack
+        end
+    | Some 'x' ->
+        begin match peek s (i + 1), peek s (i + 2) with
+        | (Some ('0'..'9' | 'a'..'f' | 'A'..'F' as c1)),
+          (Some ('0'..'9' | 'a'..'f' | 'A'..'F' as c2)) ->
+            chr (16 * (valch_hex c1) + (valch_hex c2)), i + 3
+        | _ -> raise Backtrack
+        end
+    | _ -> raise Backtrack
 
-  let rec backslash_in_string strict store = parser
-    | [< ''\010'; s >] -> skip_indent s
-    | [< ''\013'; s >] -> (skip_opt_linefeed s; skip_indent s)
-    | [< x = backslash >] -> store x
-    | [< 'c when not strict >] -> (store '\\'; store c)
-    | [< >] -> failwith "invalid string token"
+  let eof s i = if peek s i <> None then raise Backtrack
 
   let char s =
     if String.length s = 1 then s.[0]
     else if String.length s = 0 then failwith "invalid char token"
-    else match Stream.of_string s with parser
-         | [< ''\\'; x = backslash >] -> x
-         | [< >] -> failwith "invalid char token"
+    else if s.[0] <> '\\' then failwith "invalid char token"
+    else try let (c, i) = escaped_char s 1 in
+             eof s i; c
+         with Backtrack -> failwith "invalid char token"
+
+  let backslash_in_string strict store s i =
+    match peek s i with
+    | Some '\n' -> skip_indent s (i+1)
+    | Some '\r' -> skip_indent s (skip_opt_linefeed s (i+1))
+    | Some c ->
+        begin try let (x, i) = escaped_char s i in store x; i
+        with Backtrack when not strict -> (store '\\'; store c; i + 1)
+        end
+    | None -> failwith "invalid string token"
 
   let string ?strict s =
     let buf = Buffer.create 23 in
     let store = Buffer.add_char buf in
-    let rec parse = parser
-      | [< ''\\'; _ = backslash_in_string (strict <> None) store; s >] -> parse s
-      | [< 'c; s >] -> (store c; parse s)
-      | [< >] -> Buffer.contents buf
-    in parse (Stream.of_string s);
+    let rec parse i =
+      match peek s i with
+      | Some '\\' -> parse (backslash_in_string (strict <> None) store s (i+1))
+      | Some c    -> store c; parse (i+1)
+      | None      -> Buffer.contents buf
+    in parse 0
 
 end
 

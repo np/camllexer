@@ -1,1 +1,2 @@
-true: camlp4o, warn_L, warn_e, warn_R, warn_Z, warn_error_A
+true: warn_L, warn_e, warn_R, warn_Z, warn_error_A
+"pplex.ml": camlp4o
