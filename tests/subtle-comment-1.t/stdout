@@ -1,0 +1,2 @@
+COMMENT "(*\nlet f' _ _ _ = ignore in\nlet coucou = \"coucou\" in\nf' '\\\"' \"*)print_string \"coucou\";(*\\\"\";\n()\n*)"
+NEWLINE "\n"
