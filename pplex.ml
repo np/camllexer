@@ -100,7 +100,7 @@ let main () =
                  (if show then show_token_nl else print_token))
                 (if reverse then unparse_tokens strm else strm)
   with exn ->
-    Printf.eprintf "Error: %s\n%!" (string_of_exn exn)
+    (Printf.eprintf "Error: %s\n%!" (string_of_exn exn); exit 1)
 ;;
 
 main ()
