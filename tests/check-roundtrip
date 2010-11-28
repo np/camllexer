@@ -7,7 +7,8 @@ while [ $# -gt 0 ]; do
     *)  break;;
   esac
 done
+lex=${PPLEX:-$(dirname $0)/../pplex.byte}
 for i; do
   echo "$i"
-  ./pplex.byte -s "${opts[@]}" "$i" | ./pplex.byte -r "${opts[@]}" - | cmp "$i" /dev/stdin
+  "$lex" -s "${opts[@]}" "$i" | "$lex" -r "${opts[@]}" - | cmp "$i" /dev/stdin
 done
