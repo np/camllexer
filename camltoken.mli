@@ -56,7 +56,7 @@ type caml_token =
   | NEWLINE of newline
                       (** Caml new lines: `\n', `\r', or `\r\n'. *)
   | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
-                      (** Caml line directives `# 42', `# 2 "bla"' *)
+                      (** Caml line directives `# 42', `# 2 "f.ml"' *)
   | ERROR of string * error
                       (** The erroneous part of the input and an error value
                           explaining the issue. *)
@@ -122,8 +122,8 @@ val string_of_token : caml_token -> string
       CHAR('\n', "\\n")          -> ("CHAR", ["'\n'"])
       STRING("f\"o", "f\\\"o")   -> ("STRING", ["\"f\\\"o\""])
       ANTIQUOT("foo","bar")      -> ("ANTIQUOT", ["foo"; "bar"])
-      LINE_DIRECTIVE(" ",42," ",Some"f","bla")
-         -> ("LINE_DIRECTIVE", [" "; "42"; " "; "f"; "bla"])
+      LINE_DIRECTIVE(" ",42," ",Some"f.ml","bla")
+         -> ("LINE_DIRECTIVE", [" "; "42"; " "; "f.ml"; "bla"])
       LINE_DIRECTIVE("",42,"",None,"")
          -> ("LINE_DIRECTIVE", ["";"42";"";""])
 *)
@@ -142,8 +142,8 @@ val token_of_strings : (string * string list) -> caml_token option
       CHAR('\n', "\\n")          -> CHAR "'\n'"
       STRING("f\"o", "f\\\"o")   -> STRING "\"f\\\"o\""
       ANTIQUOT("foo","bar")      -> ANTIQUOT "foo" "bar"
-      LINE_DIRECTIVE("",42,"",Some"f","")
-        -> LINE_DIRECTIVE "" "42" "" "f" ""
+      LINE_DIRECTIVE("",42,"",Some"f.ml","")
+        -> LINE_DIRECTIVE "" "42" "" "f.ml" ""
       LINE_DIRECTIVE("",42,"",None,"")
         -> LINE_DIRECTIVE "" "42" "" ""
 *)
