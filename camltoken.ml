@@ -107,9 +107,10 @@ let show_unterminated =
   | Uquotation         -> "Uquotation"
   | Uantiquot          -> "Uantiquot"
 
+(* meant to be used by show_token/strings_of_token *)
 let show_error =
   function
-  | Illegal_character c -> ("Illegal_character", [Char.escaped c])
+  | Illegal_character _ -> ("Illegal_character", [])
   | Illegal_escape s    -> ("Illegal_escape",    [s])
   | Unterminated u      -> ("Unterminated",      [show_unterminated u])
   | Literal_overflow ty -> ("Literal_overflow",  [ty])
@@ -373,7 +374,7 @@ let token_of_strings = function
       (* Don't you see this code crying for the option monad? *)
       let mk err = Some (ERROR (tok, err)) in
       begin match x, xs with
-      | "Illegal_character", [c] -> mk (Illegal_character (Eval.char c))
+      | "Illegal_character", []  -> assert (tok <> ""); mk (Illegal_character tok.[0])
       | "Illegal_escape",    [s] -> mk (Illegal_escape s)
       | "Literal_overflow",  [t] -> mk (Literal_overflow t)
       | "Unterminated",      [u] ->

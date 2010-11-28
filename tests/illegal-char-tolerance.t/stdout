@@ -1,4 +1,4 @@
 LIDENT "foo"
-ERROR "\169" "Illegal_character" "\\169"
+ERROR "\169" "Illegal_character"
 LIDENT "bar"
 NEWLINE "\n"
