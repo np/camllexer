@@ -213,9 +213,9 @@ module Make (Loc : LOC)
 
 
   rule token c = parse
-    | '\n'                            { update_loc c None 1 false 0; NEWLINE LF }
-    | '\r'                            { update_loc c None 1 false 0; NEWLINE CR }
-    | "\r\n"                        { update_loc c None 1 false 0; NEWLINE CRLF }
+    | '\n'                                       { update_chars c 0; NEWLINE LF }
+    | '\r'                                       { update_chars c 0; NEWLINE CR }
+    | "\r\n"                                   { update_chars c 0; NEWLINE CRLF }
     | blank + as x                                                   { BLANKS x }
     | "~" (lowercase identchar * as x) ':'                            { LABEL x }
     | "?" (lowercase identchar * as x) ':'                         { OPTLABEL x }
@@ -227,8 +227,7 @@ module Make (Loc : LOC)
     | (int_literal as i) "L"                                        { mkINT64 i }
     | (int_literal as i) "n"                                    { mkNATIVEINT i }
     | '"'                  { with_curr_loc string c; mkSTRING (buff_contents c) }
-    | "'" (newline as x) "'"
-        { update_loc c None 1 false 1; mkCHAR x                                 }
+    | "'" (newline as x) "'"                       { update_chars c 1; mkCHAR x }
     | "'" ( [^ '\\' '\n' '\r']
           | '\\' (['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
                 |['0'-'9'] ['0'-'9'] ['0'-'9']
@@ -304,22 +303,19 @@ module Make (Loc : LOC)
           parse comment c }
     | "''"                                              { store_parse comment c }
     | "'''"                                             { store_parse comment c }
-    | "'" newline "'"
-      { update_loc c None 1 false 1; store_parse comment c                      }
+    | "'" newline "'"                 { update_chars c 1; store_parse comment c }
     | "'" [^ '\\' '\'' '\n' '\r' ] "'"                  { store_parse comment c }
     | "'\\" ['\\' '"' '\'' 'n' 't' 'b' 'r' ' '] "'"     { store_parse comment c }
     | "'\\" ['0'-'9'] ['0'-'9'] ['0'-'9'] "'"           { store_parse comment c }
     | "'\\" 'x' hexa_char hexa_char "'"                 { store_parse comment c }
     | eof                                               { unterminated Ucomment }
-    | newline
-                           { update_loc c None 1 false 0; store_parse comment c }
+    | newline                         { update_chars c 0; store_parse comment c }
     | _                                                 { store_parse comment c }
 
   and string c = parse
       '"'                                                       { set_start_p c }
     | '\\' newline ([' ' '\t'] * as space)
-        { update_loc c None 1 false (String.length space);
-          store_parse string c                                                  }
+                   { update_chars c (String.length space); store_parse string c }
     | '\\' ['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']           { store_parse string c }
     | '\\' ['0'-'9'] ['0'-'9'] ['0'-'9']                 { store_parse string c }
     | '\\' 'x' hexa_char hexa_char                       { store_parse string c }
@@ -334,8 +330,7 @@ module Make (Loc : LOC)
                  (Loc.of_lexbuf lexbuf);
             store_parse string c
           end }
-    | newline
-      { update_loc c None 1 false 0; store_parse string c                       }
+    | newline                          { update_chars c 0; store_parse string c }
     | eof                                                { unterminated Ustring }
     | _                                                  { store_parse string c }
 
@@ -362,8 +357,7 @@ module Make (Loc : LOC)
                                                               parse quotation c }
     | ">>"                                                            { store c }
     | eof                                             { unterminated Uquotation }
-    | newline                                     { update_loc c None 1 false 0 ;
-                                                        store_parse quotation c }
+    | newline                       { update_chars c 0; store_parse quotation c }
     | _                                               { store_parse quotation c }
 
   and dollar c = parse
@@ -375,8 +369,7 @@ module Make (Loc : LOC)
   and antiquot name c = parse
     | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
     | eof  { ERROR (sf "$%s:%s" name (buff_contents c), Unterminated Uantiquot) }
-    | newline
-      { update_loc c None 1 false 0; store_parse (antiquot name) c              }
+    | newline                 { update_chars c 0; store_parse (antiquot name) c }
     | '<' (':' ident)? ('@' locname)? '<'
       { store c; with_curr_loc quotation c; parse (antiquot name) c             }
     | _                                         { store_parse (antiquot name) c }
