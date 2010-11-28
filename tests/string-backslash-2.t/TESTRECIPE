@@ -1,13 +1,13 @@
 #!/bin/bash
 
-testname='unterminated-comment.t'
+testname='string-backslash-2.t'
 command="$PPLEX"
-args=( '-s' '-' )
-exit_code='1'
-stdin_file='stdin'
+args=( '-s' 'input.ml' )
+exit_code='0'
+stdin_file='/dev/null'
 stdout_file='stdout'
 stderr_file='stderr'
-sources=( )
+sources=( 'input.ml' )
 products=( )
 
 # Environment variables:

@@ -3,7 +3,7 @@
 testname='unterminated-string-in-comment.t'
 command="$PPLEX"
 args=( '-s' )
-exit_code='0'
+exit_code='1'
 stdin_file='stdin'
 stdout_file='/dev/null'
 stderr_file='stderr'

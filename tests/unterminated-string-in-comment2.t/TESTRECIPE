@@ -1,13 +1,13 @@
 #!/bin/bash
 
-testname='unterminated-comment.t'
+testname='unterminated-string-in-comment2.t'
 command="$PPLEX"
-args=( '-s' '-' )
-exit_code='1'
-stdin_file='stdin'
+args=( '-f' '-s' 'input.ml' )
+exit_code='0'
+stdin_file='/dev/null'
 stdout_file='stdout'
-stderr_file='stderr'
-sources=( )
+stderr_file='/dev/null'
+sources=( 'input.ml' )
 products=( )
 
 # Environment variables:
