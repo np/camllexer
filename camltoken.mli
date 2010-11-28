@@ -57,8 +57,9 @@ type caml_token =
                       (** Caml new lines: `\n', `\r', or `\r\n'. *)
   | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
                       (** Caml line directives `# 42', `# 2 "bla"' *)
-  | ERROR of error
-                      (** Represent an error found in the input stream *)
+  | ERROR of string * error
+                      (** The erroneous part of the input and an error value
+                          explaining the issue. *)
   | EOI
                       (** End of input *)
 
@@ -91,8 +92,6 @@ and unterminated =
   | Uquotation
   | Uantiquot
 
-exception Error of error
-
 val mkCHAR : string -> caml_token
 val mkSTRING : string -> caml_token
 val mkINT : string -> caml_token
@@ -105,14 +104,12 @@ val string_of_quotation : quotation -> string
 
 (** Display a caml token in caml lexical syntax.
 
-    Note that this function raises the Error
-    exception on the ERROR keyword.
-
     Examples:
       LIDENT "foo"              -> "foo"
       INT(42, "00000042")       -> "00000042"
       CHAR('\n', "\\n")         -> "'\n'"
       STRING("f\"o", "f\\\"o")  -> "\"f\\\"o\""
+      ERROR("\"bla", Unterminated Ustring) -> "\"bla"
  *)
 val string_of_token : caml_token -> string
 

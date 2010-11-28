@@ -90,24 +90,27 @@ module Make (Loc : LOC)
 
   let update_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
   let with_curr_loc f c = f (update_loc c) c.lexbuf
-  let parse_nested f mk c =
-    try
-      with_curr_loc f c;
-      set_start_p c;
-      mk (buff_contents c)
-    with UnterminatedExn u -> ERROR (Unterminated u)
+  let parse_nested f c =
+    with_curr_loc f c;
+    set_start_p c;
+    buff_contents c
+  let parse_comment comment c =
+    try  COMMENT (parse_nested comment (in_comment c))
+    with UnterminatedExn u -> ERROR (buff_contents c, Unterminated u)
   let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
   let mk_quotation quotation c name loc shift =
-    let mk s =
-      let contents = String.sub s 0 (String.length s - 2) in
-      QUOTATION { q_name     = name     ;
-                  q_loc      = loc      ;
-                  q_shift    = shift    ;
-                  q_contents = contents }
-    in parse_nested quotation mk (update_loc c)
-  let mkCOMMENT x = COMMENT x
+    let mk contents =
+      { q_name     = name     ;
+        q_loc      = loc      ;
+        q_shift    = shift    ;
+        q_contents = contents }
+    in
+    let mkQUOTATION s = QUOTATION (mk (String.sub s 0 (String.length s - 2))) in
+    try  mkQUOTATION (parse_nested quotation (update_loc c))
+    with UnterminatedExn u ->
+      ERROR (string_of_quotation (mk (buff_contents c)), Unterminated u)
 
 
   (* Update the current location with file name and line number. *)
@@ -127,8 +130,8 @@ module Make (Loc : LOC)
 
   let update_chars c chars = update_loc c None 1 false chars
 
-  let illegal_escape s = ERROR (Illegal_escape s)
-  let illegal_character c = ERROR (Illegal_character c)
+  let illegal_escape tok s = ERROR (tok, Illegal_escape s)
+  let illegal_character c = ERROR (String.make 1 c, Illegal_character c)
   let unterminated u = raise (UnterminatedExn u)
 
   let warn msg loc =
@@ -230,11 +233,11 @@ module Make (Loc : LOC)
           | '\\' (['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
                 |['0'-'9'] ['0'-'9'] ['0'-'9']
                 |'x' hexa_char hexa_char) as x) "'"                  { mkCHAR x }
-    | "'\\" (_ as c)                         { illegal_escape (String.make 1 c) }
-    | "(*"
-                       { store c; parse_nested comment mkCOMMENT (in_comment c) }
+    | ("'\\" (_ as c) as s)                { illegal_escape s (String.make 1 c) }
+    | "(*"                                   { store c; parse_comment comment c }
     | "(*)"
         { warn_comment_start lexbuf;
+        (* TODO: why not using parse_comment here? *)
          parse (fun c lb -> comment c lb; COMMENT (buff_contents c)) (in_comment c) }
     | "<<" (quotchar* as beginning)
       { if quotations c
@@ -294,8 +297,8 @@ module Make (Loc : LOC)
     | "\""
         { store c;
           begin try with_curr_loc string c
-          with Error (Unterminated Ustring) ->
-            raise (Error (Unterminated Ustring_in_comment))
+          with UnterminatedExn Ustring ->
+            raise (UnterminatedExn Ustring_in_comment)
           end;
           Buffer.add_char c.buffer '"';
           parse comment c }
@@ -371,7 +374,7 @@ module Make (Loc : LOC)
 
   and antiquot name c = parse
     | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
-    | eof                                      { ERROR (Unterminated Uantiquot) }
+    | eof  { ERROR (sf "$%s:%s" name (buff_contents c), Unterminated Uantiquot) }
     | newline
       { update_loc c None 1 false 0; store_parse (antiquot name) c              }
     | '<' (':' ident)? ('@' locname)? '<'

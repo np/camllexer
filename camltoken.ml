@@ -46,7 +46,7 @@ type caml_token =
   | BLANKS        of blanks
   | NEWLINE       of newline
   | LINE_DIRECTIVE of blanks * int * blanks * string option * comment
-  | ERROR         of error
+  | ERROR         of string * error
   | EOI
 
 and newline = LF | CR | CRLF
@@ -67,8 +67,6 @@ and unterminated =
   | Ustring_in_comment
   | Uquotation
   | Uantiquot
-
-exception Error of error
 
 let sf = Printf.sprintf
 
@@ -165,7 +163,7 @@ let string_of_token = function
   | QUOTATION     q -> string_of_quotation q
   | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
-  | ERROR err       -> raise (Error err)
+  | ERROR (tok, _)  -> tok
   | LINE_DIRECTIVE (bl1, i, bl2, sopt, com) ->
       assert (blanks bl1);
       assert (blanks bl2);
@@ -197,7 +195,7 @@ let strings_of_token = function
   | BLANKS s         -> ("BLANKS", [s])
   | NEWLINE nl       -> ("NEWLINE", [string_of_newline nl])
   | EOI              -> ("EOI", [])
-  | ERROR err        -> ("ERROR", let (x,xs) = show_error err in x :: xs)
+  | ERROR (tok, err) -> ("ERROR", tok :: let (x,xs) = show_error err in x :: xs)
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
   | LINE_DIRECTIVE(bl1, i, bl2, sopt, com) ->
       match sopt with
@@ -271,20 +269,20 @@ module Eval = struct
 
 end
 
-let literal_overflow ty = ERROR (Literal_overflow ty)
+let literal_overflow tok ty = ERROR (tok, Literal_overflow ty)
 
 let mkCHAR       s = CHAR(Eval.char s, s)
 let mkSTRING     s = STRING(Eval.string s, s)
 let mkINT        s = try  INT(int_of_string s, s)
-                     with Failure _ -> literal_overflow "int"
+                     with Failure _ -> literal_overflow s "int"
 let mkINT32      s = try  INT32(Int32.of_string s, s)
-                     with Failure _ -> literal_overflow "int32"
+                     with Failure _ -> literal_overflow (s^"l") "int32"
 let mkINT64      s = try  INT64(Int64.of_string s, s)
-                     with Failure _ -> literal_overflow "int64"
+                     with Failure _ -> literal_overflow (s^"L")"int64"
 let mkNATIVEINT  s = try  NATIVEINT(Nativeint.of_string s, s)
-                     with Failure _ -> literal_overflow "nativeint"
+                     with Failure _ -> literal_overflow (s^"n") "nativeint"
 let mkFLOAT      s = try  FLOAT(float_of_string s, s)
-                     with Failure _ -> literal_overflow "float"
+                     with Failure _ -> literal_overflow s "float"
 
 (* not exported *)
 let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?s ?(com="") i =
@@ -318,19 +316,20 @@ let token_of_strings = function
   | "NEWLINE", ["\r"]        -> Some (NEWLINE CR)
   | "NEWLINE", ["\r\n"]      -> Some (NEWLINE CRLF)
   | "EOI", []                -> Some EOI
-  | "ERROR", (x :: xs) ->
+  | "ERROR", (tok :: x :: xs) ->
       (* Don't you see this code crying for the option monad? *)
+      let mk err = Some (ERROR (tok, err)) in
       begin match x, xs with
-      | "Illegal_character", [c] -> Some (ERROR (Illegal_character (Eval.char c)))
-      | "Illegal_escape",    [s] -> Some (ERROR (Illegal_escape s))
-      | "Literal_overflow",  [t] -> Some (ERROR (Literal_overflow t))
+      | "Illegal_character", [c] -> mk (Illegal_character (Eval.char c))
+      | "Illegal_escape",    [s] -> mk (Illegal_escape s)
+      | "Literal_overflow",  [t] -> mk (Literal_overflow t)
       | "Unterminated",      [u] ->
           begin match u with
-          | "Ucomment"           -> Some (ERROR (Unterminated Ucomment))
-          | "Ustring"            -> Some (ERROR (Unterminated Ustring))
-          | "Ustring_in_comment" -> Some (ERROR (Unterminated Ustring_in_comment))
-          | "Uquotation"         -> Some (ERROR (Unterminated Uquotation))
-          | "Uantiquot"          -> Some (ERROR (Unterminated Uantiquot))
+          | "Ucomment"           -> mk (Unterminated Ucomment)
+          | "Ustring"            -> mk (Unterminated Ustring)
+          | "Ustring_in_comment" -> mk (Unterminated Ustring_in_comment)
+          | "Uquotation"         -> mk (Unterminated Uquotation)
+          | "Uantiquot"          -> mk (Unterminated Uantiquot)
           | _                    -> None
           end
       | _ -> None
