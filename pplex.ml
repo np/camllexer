@@ -54,6 +54,7 @@ let main () =
     Printf.eprintf " -f Enable fault tolerance\n";
     Printf.eprintf " -Q Enable the lexing of quotations\n";
     Printf.eprintf " -A Enable the lexing of anti-quotations\n";
+    Printf.eprintf " -w Disable warnings\n";
     Printf.eprintf " -h Display this help and exit\n";
     exit 1
   in
@@ -65,6 +66,8 @@ let main () =
   let fault_tolerant, argv = rm "-f" argv in
   let quotations, argv = rm "-Q" argv in
   let antiquotations, argv = rm "-A" argv in
+  let not_warnings, argv = rm "-w" argv in
+  let warnings = not not_warnings in
   let help, argv = rm "-h" argv in
   let () = if help then usage () in
   let filename =
@@ -77,7 +80,7 @@ let main () =
   let ic = if filename = "-" then stdin else open_in filename in
   let lexbuf = Lexing.from_channel ic in
   let () = Lex.setup_loc lexbuf loc in
-  let strm = Lex.from_lexbuf ~quotations ~antiquotations lexbuf in
+  let strm = Lex.from_lexbuf ~quotations ~antiquotations ~warnings lexbuf in
   let dont_raise_errors f (x, _) = f x in
   let raise_errors f (x, loc) =
     match x with

@@ -33,14 +33,17 @@ module Make : functor (Loc : LOC) -> sig
   val from_lexbuf :
     quotations:bool ->
     antiquotations:bool ->
+    warnings:bool ->
     Lexing.lexbuf -> (Camltoken.caml_token * Loc.t) Stream.t
   val setup_loc : Lexing.lexbuf -> Loc.t -> unit
   val from_string :
     quotations:bool ->
     antiquotations:bool ->
+    warnings:bool ->
     Loc.t -> string -> (Camltoken.caml_token * Loc.t) Stream.t
   val from_stream :
     quotations:bool ->
     antiquotations:bool ->
+    warnings:bool ->
     Loc.t -> char Stream.t -> (Camltoken.caml_token * Loc.t) Stream.t
 end

@@ -57,6 +57,7 @@ module Make (Loc : LOC)
     in_comment : bool     ;
     quotations : bool     ;
     antiquots  : bool     ;
+    warnings   : bool     ;
     lexbuf     : lexbuf   ;
     buffer     : Buffer.t }
 
@@ -65,6 +66,7 @@ module Make (Loc : LOC)
     in_comment = false     ;
     quotations = true      ;
     antiquots  = false     ;
+    warnings   = true      ;
     lexbuf     = lb        ;
     buffer     = Buffer.create 256 }
 
@@ -137,12 +139,14 @@ module Make (Loc : LOC)
   let warn msg loc =
     Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) msg
 
-  let warn_comment_not_end lexbuf op =
-    if op <> "" && op.[String.length op - 1] = '*' then
+  let warn_comment_not_end c lexbuf op =
+    if c.warnings && op <> "" && op.[String.length op - 1] = '*' then
       warn "this is not the end of a comment" (Loc.of_lexbuf lexbuf)
 
-  let warn_comment_start lexbuf =
-    warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
+  let warn_comment_start c lexbuf =
+    if c.warnings then
+      warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
+
 
   }
 
@@ -235,7 +239,7 @@ module Make (Loc : LOC)
     | ("'\\" (_ as c) as s)                { illegal_escape s (String.make 1 c) }
     | "(*"                                   { store c; parse_comment comment c }
     | "(*)"
-        { warn_comment_start lexbuf;
+        { warn_comment_start c lexbuf;
         (* TODO: why not using parse_comment here? *)
          parse (fun c lb -> comment c lb; COMMENT (buff_contents c)) (in_comment c) }
     | "<<" (quotchar* as beginning)
@@ -269,12 +273,12 @@ module Make (Loc : LOC)
     | '(' (not_star_symbolchar as op) ')'
                                            { PSYMBOL ("", String.make 1 op, "") }
     | '(' (not_star_symbolchar symbolchar* as op) ')'
-                                               { warn_comment_not_end lexbuf op ;
+                                             { warn_comment_not_end c lexbuf op ;
                                                            PSYMBOL ("", op, "") }
     | '(' (not_star_symbolchar symbolchar* as op) (blank+ as bl) ')'
                                                          { PSYMBOL ("", op, bl) }
     | '(' (blank+ as bl) (symbolchar+ as op) ')'
-                                               { warn_comment_not_end lexbuf op ;
+                                             { warn_comment_not_end c lexbuf op ;
                                                            PSYMBOL (bl, op, "") }
     | '(' (blank+ as pbl) (symbolchar+ as op) (blank+ as sbl) ')'
                                                        { PSYMBOL (pbl, op, sbl) }
@@ -327,7 +331,7 @@ module Make (Loc : LOC)
     | '\\' ['0'-'9'] ['0'-'9'] ['0'-'9']                 { store_parse string c }
     | '\\' 'x' hexa_char hexa_char                       { store_parse string c }
     | '\\' (_ as x)
-        { if is_in_comment c
+        { if is_in_comment c || not c.warnings
           then store_parse string c
           else begin
 (*
@@ -403,11 +407,13 @@ module Make (Loc : LOC)
       Some ((tok, loc))
     in Stream.from next
 
-  let from_lexbuf ~quotations ~antiquotations lb =
+  let from_lexbuf ~quotations ~antiquotations ~warnings lb =
     let c = { (default_context lb) with
               loc        = Loc.of_lexbuf lb;
               antiquots  = antiquotations;
-              quotations = quotations      }
+              quotations = quotations;
+              warnings   = warnings
+            }
     in from_context c
 
   let setup_loc lb loc =
@@ -415,14 +421,14 @@ module Make (Loc : LOC)
     lb.lex_abs_pos <- start_pos.pos_cnum;
     lb.lex_curr_p  <- start_pos
 
-  let from_string ~quotations ~antiquotations loc str =
+  let from_string ~quotations ~antiquotations ~warnings loc str =
     let lb = Lexing.from_string str in
     setup_loc lb loc;
-    from_lexbuf ~quotations ~antiquotations lb
+    from_lexbuf ~quotations ~antiquotations ~warnings lb
 
-  let from_stream ~quotations ~antiquotations loc strm =
+  let from_stream ~quotations ~antiquotations ~warnings loc strm =
     let lb = Lexing.from_function (lexing_store strm) in
     setup_loc lb loc;
-    from_lexbuf ~quotations ~antiquotations lb
+    from_lexbuf ~quotations ~antiquotations ~warnings lb
 end
 }
