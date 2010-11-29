@@ -29,36 +29,48 @@ let isWARNING = function
   | WARNING _ -> true
   | _         -> false
 
-let rec iter_tokens (f : (caml_token * 'a) -> unit) : (caml_token * 'a) Stream.t -> unit =
-  parser
-  | [< '(EOI, _) >] -> ()
-  | [< 'x ; xs >] -> f x; iter_tokens f xs
-  | [<>] -> ()
+let rec iter f next =
+  match next () with
+  | Some x -> f x; iter f next
+  | None   -> ()
 
-let rec filter p =
-  parser
-  | [< 'x; xs >] -> if p x then [< 'x; filter p xs >] else filter p xs
-  | [<>] -> [<>]
+let rec filter p next () =
+  match next () with
+  | Some x -> if p x then Some x else filter p next ()
+  | None -> None
 
-let rec strings =
-  parser
-  | [< '(BLANKS " ",_) ; '(STRING(x,_),_) ; xs = strings >] -> x :: xs
-  | [<>] -> []
+let rec strings next =
+  match next () with
+  | Some (BLANKS " ", _) ->
+      begin match next () with
+      | Some (STRING(x,_),_) ->
+          let (y, xs) = strings next in
+          (y, x :: xs)
+      | x -> (x, [])
+      end
+  | x -> (x, [])
 
 exception LexError of error
 exception Unexpected_token of caml_token
+exception Unexpected_EOI
 exception Token_of_strings_error of string * string list
 
-let rec unparse_tokens =
-  parser
-  | [< '(UIDENT name, loc); args = strings; '(NEWLINE _,_); strm >] ->
-      begin match token_of_strings (name, args) with
-      | Some x -> [< '(x,loc); unparse_tokens strm >]
-      | None   -> Loc.raise loc (Token_of_strings_error (name, args))
+let unparse_tokens next () =
+  match next () with
+  | Some (UIDENT name, loc) ->
+      let (lh, args) = strings next in
+      begin match lh with
+      | Some (NEWLINE _,_) ->
+          begin match token_of_strings (name, args) with
+          | Some x -> Some (x,loc)
+          | None   -> Loc.raise loc (Token_of_strings_error (name, args))
+          end
+      | Some (tok,loc) -> Loc.raise loc (Unexpected_token tok)
+      | None -> Loc.raise loc Unexpected_EOI
       end
-  | [< '(EOI,loc) >] -> [< '(eoi,loc) >]
-  | [< '(tok,loc) >] -> Loc.raise loc (Unexpected_token tok)
-  | [<>] -> [<>]
+  | Some (EOI,_) as x -> x
+  | Some (tok,loc) -> Loc.raise loc (Unexpected_token tok)
+  | None -> None
 
 let rec rm x = function
   | [] -> (false, [])
@@ -108,7 +120,6 @@ let main () : unit =
               ; antiquotations = antiquotations
               ; line_directives = line_directives } in
   let next = Lex.from_channel flags loc ic in
-  let strm = Stream.from (fun _ -> next ()) in
   let loc_of_unterminated loc = function
     | (pos, _) :: _ -> Loc.of_positions pos (Loc.stop_pos loc)
     | [] -> loc
@@ -135,18 +146,17 @@ let main () : unit =
     | LexError err    -> string_of_error err
     | Token_of_strings_error (name, args) ->
         sf "Parse Error: %s %s" name (String.concat " " (List.map String.escaped args))
-    | Unexpected_token tok -> sf "Unpexcted token: %s" (string_of_token tok)
-    | Stream.Error "" -> "Unknown stream error"
-    | Stream.Error msg -> sf "Stream Error: %s" msg
+    | Unexpected_token tok -> sf "Unexpected token: %s" (string_of_token tok)
+    | Unexpected_EOI -> "Unexpected end of input"
     | Loc.Exc_located(loc, exn) ->
         sf "%s: %s" (Loc.to_string loc) (string_of_exn exn)
     | exn             -> Printexc.to_string exn
   in
   let show = show_tokens || positions || locations in
   try
-    (if reverse then unparse_tokens strm else strm) |>
+    (if reverse then unparse_tokens next else next) |>
     (if nor_WARNING then filter (not <.> isWARNING <.> fst) else id) |>
-    iter_tokens ((if no_warnings    then ignore        else show_warnings) >>
+    iter        ((if no_warnings    then ignore        else show_warnings) >>
                  (if fault_tolerant then ignore        else raise_errors)  >>
                  (if positions      then show_pos      else ignore)        >>
                  (if locations      then show_loc      else ignore)        >>
