@@ -1,1 +1,1 @@
-ERROR "(*\"\n" "Unterminated" "Ucomment"
+ERROR "(*\"\n" "Unterminated" "Ustring_in_comment"

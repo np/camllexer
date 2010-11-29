@@ -1,1 +1,1 @@
-Error: File "-", line 1, characters 0-11 (end at line 2, character 0): Comment not terminated
+Error: File "-", line 1, characters 3-11 (end at line 2, character 0): This comment contains an unterminated string literal

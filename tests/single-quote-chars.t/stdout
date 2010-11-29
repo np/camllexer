@@ -1,0 +1,4 @@
+CHAR "'"
+NEWLINE "\n"
+CHAR "\\'"
+NEWLINE "\n"
