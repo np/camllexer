@@ -174,7 +174,7 @@ module Make (Loc : LOC)
     let len = lb.lex_curr_pos - lb.lex_start_pos in
     let newlines, last_newline_offset = count_newlines len (Lexing.lexeme_char lb) in
     let chars = len - 1 - last_newline_offset in
-    update_relative_position c newlines chars
+    if newlines <> 0 then update_relative_position c newlines chars
 
   let illegal_character c = mkERROR (String.make 1 c) (Illegal_character c)
 
