@@ -1,0 +1,4 @@
+LIDENT "a"
+COMMENT "(*)b(*c*)d*)"
+LIDENT "e"
+NEWLINE "\n"
