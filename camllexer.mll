@@ -435,6 +435,11 @@ module Make (Loc : LOC)
     setup_loc lb loc;
     from_lexbuf ~quotations ~antiquotations ~warnings lb
 
+  let from_channel ~quotations ~antiquotations ~warnings loc ic =
+    let lb = Lexing.from_channel ic in
+    setup_loc lb loc;
+    from_lexbuf ~quotations ~antiquotations ~warnings lb
+
   let from_stream ~quotations ~antiquotations ~warnings loc strm =
     let lb = Lexing.from_function (lexing_store strm) in
     setup_loc lb loc;

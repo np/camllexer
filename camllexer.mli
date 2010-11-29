@@ -49,6 +49,12 @@ module Make : functor (Loc : LOC) -> sig
     warnings:bool ->
     Loc.t -> string -> token iterator
 
+  val from_channel :
+    quotations:bool ->
+    antiquotations:bool ->
+    warnings:bool ->
+    Loc.t -> in_channel -> token iterator
+
   val from_stream :
     quotations:bool ->
     antiquotations:bool ->

@@ -78,9 +78,7 @@ let main () =
   in
   let loc = Loc.mk filename in
   let ic = if filename = "-" then stdin else open_in filename in
-  let lexbuf = Lexing.from_channel ic in
-  let () = Lex.setup_loc lexbuf loc in
-  let next = Lex.from_lexbuf ~quotations ~antiquotations ~warnings lexbuf in
+  let next = Lex.from_channel ~quotations ~antiquotations ~warnings loc ic in
   let strm = Stream.from (fun _ -> next ()) in
   let dont_raise_errors f (x, _) = f x in
   let raise_errors f (x, loc) =
