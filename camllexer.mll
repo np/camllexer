@@ -398,18 +398,16 @@ module Make (Loc : LOC)
 
   {
 
+  (* If we doesn't want to block on waiting input,
+     we can't return more than one element at a time. *)
   let lexing_store s buff max =
-    let rec self n s =
-      if n >= max then n
-      else
-        match Stream.peek s with
-        | Some x ->
-            Stream.junk s;
-            buff.[n] <- x;
-            succ n
-        | _ -> n
-    in
-    self 0 s
+    assert (max > 0);
+    match Stream.peek s with
+    | Some x ->
+        Stream.junk s;
+        buff.[0] <- x;
+        1
+    | _ -> 0
 
   let from_context c =
     let tok = with_curr_loc token c in
