@@ -19,7 +19,7 @@
 (** A general convention about the constructors of this data type is to keep
     both the parsed value and the original string representation. For instance
     for int literals, `00000042' will represented by INT (42, "00000042"). *)
-type caml_token =
+type caml_token = (*should we use private here?*)
   | KEYWORD of string (** Commonly used for words like `let', `open'... *)
   | LIDENT of string  (** Lower-case identifiers like `foo', `bar42'... *)
   | UIDENT of string  (** Upper-case identifiers like `Foo', `Bar42'... *)
@@ -110,6 +110,25 @@ val mkINT32 : string -> caml_token
 val mkINT64 : string -> caml_token
 val mkNATIVEINT : string -> caml_token
 val mkFLOAT : string -> caml_token
+val mkKEYWORD : string -> caml_token
+val mkLIDENT : string -> caml_token
+val mkUIDENT : string -> caml_token
+val mkSYMBOL : string -> caml_token
+val mkPSYMBOL : ?pre_blanks:blanks -> ?post_blanks:blanks -> string -> caml_token
+val mkLABEL : string -> caml_token
+val mkOPTLABEL : string -> caml_token
+val mkQUOTATION : quotation -> caml_token
+val mkANTIQUOT : ?name:string -> string -> caml_token
+val mkCOMMENT : comment -> caml_token
+val mkBLANKS : blanks -> caml_token
+val mkNEWLINE : newline -> caml_token
+val mkLINE_DIRECTIVE : line_directive -> caml_token
+(*
+val mkLINE_DIRECTIVE : ?bl1:blanks -> ?bl2:blanks -> ?zeros:int -> ?s:string ->
+                       ?com:string ?nl:string -> int -> caml_token
+*)
+val mkERROR : string -> error -> caml_token
+val eoi : caml_token
 
 val string_of_quotation : quotation -> string
 

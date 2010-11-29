@@ -87,7 +87,7 @@ module Make (Loc : LOC)
     let p = c.lexbuf.lex_start_p in
     c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
 
-  let unterminated s u = ERROR(s, Unterminated u)
+  let unterminated s u = mkERROR s (Unterminated u)
 
   let update_cxt_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
   let with_curr_loc f c = f (update_cxt_loc c) c.lexbuf
@@ -98,7 +98,7 @@ module Make (Loc : LOC)
     set_start_p c;
     let contents = buff_contents c in
     match r with
-    | [] -> COMMENT contents
+    | [] -> mkCOMMENT contents
     | us -> unterminated contents us
   let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
@@ -111,12 +111,12 @@ module Make (Loc : LOC)
         q_shift    = shift    ;
         q_contents = contents }
     in
-    let mkQUOTATION s = QUOTATION (mk (String.sub s 0 (String.length s - 2))) in
     let r = with_curr_loc_in Uquotation quotation c in
     set_start_p c;
     let contents = buff_contents c in
     match r with
-    | [] -> mkQUOTATION contents
+    | [] -> let s = contents in
+            mkQUOTATION (mk (String.sub s 0 (String.length s - 2)))
     | us -> unterminated (string_of_quotation (mk contents)) us
 
   let (&) x f = match x with
@@ -164,7 +164,7 @@ module Make (Loc : LOC)
     let chars = len - 1 - last_newline_offset in
     update_location c None newlines false chars
 
-  let illegal_character c = ERROR (String.make 1 c, Illegal_character c)
+  let illegal_character c = mkERROR (String.make 1 c) (Illegal_character c)
 
   let warn msg loc =
     Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) msg
@@ -257,14 +257,14 @@ module Make (Loc : LOC)
 
 
   rule token c = parse
-    | '\n'                                       { update_chars c 0; NEWLINE LF }
-    | '\r'                                       { update_chars c 0; NEWLINE CR }
-    | "\r\n"                                   { update_chars c 0; NEWLINE CRLF }
-    | blank + as x                                                   { BLANKS x }
-    | "~" (lowercase identchar * as x) ':'                            { LABEL x }
-    | "?" (lowercase identchar * as x) ':'                         { OPTLABEL x }
-    | lowercase identchar * as x                                     { LIDENT x }
-    | uppercase identchar * as x                                     { UIDENT x }
+    | '\n'                                     { update_chars c 0; mkNEWLINE LF }
+    | '\r'                                     { update_chars c 0; mkNEWLINE CR }
+    | "\r\n"                                 { update_chars c 0; mkNEWLINE CRLF }
+    | blank + as x                                                 { mkBLANKS x }
+    | "~" (lowercase identchar * as x) ':'                          { mkLABEL x }
+    | "?" (lowercase identchar * as x) ':'                       { mkOPTLABEL x }
+    | lowercase identchar * as x                                   { mkLIDENT x }
+    | uppercase identchar * as x                                   { mkUIDENT x }
     | int_literal as i                                                { mkINT i }
     | float_literal as f                                            { mkFLOAT f }
     | (int_literal as i) "l"                                        { mkINT32 i }
@@ -284,7 +284,7 @@ module Make (Loc : LOC)
         else parse (symbolchar_star ("<<" ^ beginning)) c                       }
     | "<<>>"
       { if quotations c
-        then QUOTATION { q_name = ""; q_loc = ""; q_shift = 2; q_contents = "" }
+        then mkQUOTATION { q_name = ""; q_loc = ""; q_shift = 2; q_contents = "" }
         else parse (symbolchar_star "<<>>") c                                   }
     | "<@"
       { if quotations c then with_curr_loc maybe_quotation_at c
@@ -298,37 +298,37 @@ module Make (Loc : LOC)
                                 { let inum = int_of_string num in
                                   let nl = newline_of_string nl in
                                   update_location c name inum true 0;
-                                  LINE_DIRECTIVE{l_blanks1=bl1;
-                                                 l_zeros=String.length zeros;
-                                                 l_linenum=inum;
-                                                 l_blanks2=bl2;
-                                                 l_filename=name;
-                                                 l_comment=com;
-                                                 l_newline=nl} }
+                                  mkLINE_DIRECTIVE{l_blanks1=bl1;
+                                                   l_zeros=String.length zeros;
+                                                   l_linenum=inum;
+                                                   l_blanks2=bl2;
+                                                   l_filename=name;
+                                                   l_comment=com;
+                                                   l_newline=nl} }
     | '(' (not_star_symbolchar as op) ')'
-                                           { PSYMBOL ("", String.make 1 op, "") }
+                                                 { mkPSYMBOL (String.make 1 op) }
     | '(' (not_star_symbolchar symbolchar* as op) ')'
                                              { warn_comment_not_end c lexbuf op ;
-                                                           PSYMBOL ("", op, "") }
-    | '(' (not_star_symbolchar symbolchar* as op) (blank+ as bl) ')'
-                                                         { PSYMBOL ("", op, bl) }
-    | '(' (blank+ as bl) (symbolchar+ as op) ')'
+                                                                   mkPSYMBOL op }
+    | '(' (not_star_symbolchar symbolchar* as op) (blank+ as post_blanks) ')'
+                                                    { mkPSYMBOL ~post_blanks op }
+    | '(' (blank+ as pre_blanks) (symbolchar+ as op) ')'
                                              { warn_comment_not_end c lexbuf op ;
-                                                           PSYMBOL (bl, op, "") }
-    | '(' (blank+ as pbl) (symbolchar+ as op) (blank+ as sbl) ')'
-                                                       { PSYMBOL (pbl, op, sbl) }
+                                                       mkPSYMBOL ~pre_blanks op }
+    | '(' (blank+ as pre_blanks) (symbolchar+ as op) (blank+ as post_blanks) ')'
+                                        { mkPSYMBOL ~pre_blanks ~post_blanks op }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"
       | ":=" | ":>" | ";"  | ";;" | "_"
-      | left_delimitor | right_delimitor ) as x  { SYMBOL x }
+      | left_delimitor | right_delimitor ) as x                    { mkSYMBOL x }
     | '$' { if antiquots c
             then with_curr_loc dollar (shift 1 c)
             else parse (symbolchar_star "$") c }
     | ['~' '?' '!' '=' '<' '>' '|' '&' '@' '^' '+' '-' '*' '/' '%' '\\'] symbolchar *
-                                                                as x { SYMBOL x }
+                                                              as x { mkSYMBOL x }
     | eof
       { let pos = lexbuf.lex_curr_p in
         lexbuf.lex_curr_p <- { pos with pos_bol  = pos.pos_bol  + 1 ;
-                                        pos_cnum = pos.pos_cnum + 1 }; EOI      }
+                                        pos_cnum = pos.pos_cnum + 1 }; eoi      }
     | _ as c                                              { illegal_character c }
 
   and comment c = parse
@@ -352,12 +352,12 @@ module Make (Loc : LOC)
 
   and symbolchar_star beginning c = parse
     | symbolchar* as tok            { move_start_p (-String.length beginning) c ;
-                                                        SYMBOL(beginning ^ tok) }
+                                                     mkSYMBOL (beginning ^ tok) }
 
   and maybe_quotation_at c = parse
     | (ident as loc) '<'
       { mk_quotation quotation c "" loc (1 + String.length loc)                 }
-    | symbolchar* as tok                                   { SYMBOL("<@" ^ tok) }
+    | symbolchar* as tok                                 { mkSYMBOL("<@" ^ tok) }
 
   and maybe_quotation_colon c = parse
     | (ident as name) '<'
@@ -365,7 +365,7 @@ module Make (Loc : LOC)
     | (ident as name) '@' (locname as loc) '<'
       { mk_quotation quotation c name loc
                      (2 + String.length loc + String.length name)               }
-    | symbolchar* as tok                                   { SYMBOL("<:" ^ tok) }
+    | symbolchar* as tok                                 { mkSYMBOL("<:" ^ tok) }
 
   and quotation c = parse
     | '<' (':' ident)? ('@' locname)? '<'           {                   store c ;
@@ -377,13 +377,13 @@ module Make (Loc : LOC)
     | _                                               { store_parse quotation c }
 
   and dollar c = parse
-    | '$'                                     { set_start_p c; ANTIQUOT("", "") }
+    | '$'                                        { set_start_p c; mkANTIQUOT "" }
     | ('`'? (identchar*|'.'+) as name) ':'
       { with_curr_loc (antiquot name) (shift (1 + String.length name) c)        }
     | _                                           { store_parse (antiquot "") c }
 
   and antiquot name c = parse
-    | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
+    | '$'                   { set_start_p c; mkANTIQUOT ~name (buff_contents c) }
     | eof       { unterminated (sf "$%s:%s" name (buff_contents c)) [Uantiquot] }
     | newline                 { update_chars c 0; store_parse (antiquot name) c }
     | '<' (':' ident)? ('@' locname)? '<'

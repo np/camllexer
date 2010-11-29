@@ -329,6 +329,8 @@ let cvt_int64_literal s =
 let cvt_nativeint_literal s =
   Nativeint.neg (Nativeint.of_string ("-" ^ String.sub s 0 (String.length s - 1)))
 
+let mkERROR s e = ERROR (s, e)
+
 let mkCHAR s = try CHAR(Eval.char s, s)
                with Failure _ -> illegal_escape (sf "'%s'" s) s
 
@@ -345,6 +347,23 @@ let mkNATIVEINT  s = try  NATIVEINT(cvt_nativeint_literal s, s)
 let mkFLOAT      s = try  FLOAT(float_of_string s, s)
                      with Failure _ -> literal_overflow s "float"
 
+let mkKEYWORD s = KEYWORD s
+(* TODO add some assertions? *)
+let mkLIDENT s = LIDENT s
+let mkUIDENT s = UIDENT s
+let mkSYMBOL s = SYMBOL s
+let mkPSYMBOL ?(pre_blanks="") ?(post_blanks="") s =
+  PSYMBOL(pre_blanks, s, post_blanks)
+let mkLABEL s = LABEL s
+let mkOPTLABEL s = OPTLABEL s
+let mkQUOTATION q = QUOTATION q
+let mkANTIQUOT ?(name="") s = ANTIQUOT (name, s)
+let mkCOMMENT com = COMMENT com
+let mkBLANKS s = BLANKS s
+let mkNEWLINE nl = NEWLINE nl
+let mkLINE_DIRECTIVE ld = LINE_DIRECTIVE ld
+let eoi = EOI
+
 let newline_of_string = function
   | "\n"   -> LF
   | "\r"   -> CR
@@ -352,7 +371,7 @@ let newline_of_string = function
   | _      -> invalid_arg "newline_of_string"
 
 (* not exported *)
-let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?(zeros="0") ?s ?(com="") ?(nl="\n") i =
+let mkLINE_DIRECTIVE' ?(bl1="") ?(bl2="") ?(zeros="0") ?s ?(com="") ?(nl="\n") i =
   assert (blanks bl1);
   assert (blanks bl2);
   assert (no_newline com);
@@ -415,11 +434,11 @@ let token_of_strings = function
   | "LINE_DIRECTIVE", xs     ->
       begin match xs with
       (* One are a bit lax in the input *)
-      | [i]                  -> Some (mkLINE_DIRECTIVE i)
-      | [i; s]               -> Some (mkLINE_DIRECTIVE ~s i)
+      | [i]                  -> Some (mkLINE_DIRECTIVE' i)
+      | [i; s]               -> Some (mkLINE_DIRECTIVE' ~s i)
 
-      | [bl1;zeros;i;bl2;com;nl]   -> Some (mkLINE_DIRECTIVE ~bl1 ~zeros ~bl2 ~com ~nl i)
-      | [bl1;zeros;i;bl2;s;com;nl] -> Some (mkLINE_DIRECTIVE ~bl1 ~zeros ~bl2 ~s ~com ~nl i)
+      | [bl1;zeros;i;bl2;com;nl]   -> Some (mkLINE_DIRECTIVE' ~bl1 ~zeros ~bl2 ~com ~nl i)
+      | [bl1;zeros;i;bl2;s;com;nl] -> Some (mkLINE_DIRECTIVE' ~bl1 ~zeros ~bl2 ~s ~com ~nl i)
       | _                    -> None
       end
   | _                        -> None

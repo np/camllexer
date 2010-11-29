@@ -42,7 +42,7 @@ let rec unparse_tokens =
       | Some x -> [< '(x,loc); unparse_tokens strm >]
       | None   -> Loc.raise loc PPLexParseError
       end
-  | [< '(EOI,loc) >] -> [< '(EOI,loc) >]
+  | [< '(EOI,loc) >] -> [< '(eoi,loc) >]
   | [< '(_,loc) >] -> Loc.raise loc PPLexParseError
   | [<>] -> raise PPLexParseError
 
