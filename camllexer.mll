@@ -129,7 +129,7 @@ module Make (Loc : LOC)
 
   (* Update the current location with file name and line number. *)
 
-  let update_location c file line absolute chars =
+  let update_absolute_position c file line =
     let lexbuf = c.lexbuf in
     let pos = lexbuf.lex_curr_p in
     let new_file = match file with
@@ -138,11 +138,19 @@ module Make (Loc : LOC)
     in
     lexbuf.lex_curr_p <- { pos with
       pos_fname = new_file;
-      pos_lnum = if absolute then line else pos.pos_lnum + line;
+      pos_lnum = line;
+      pos_bol = pos.pos_cnum;
+    }
+
+  let update_relative_position c line chars =
+    let lexbuf = c.lexbuf in
+    let pos = lexbuf.lex_curr_p in
+    lexbuf.lex_curr_p <- { pos with
+      pos_lnum = pos.pos_lnum + line;
       pos_bol = pos.pos_cnum - chars;
     }
 
-  let update_chars c chars = update_location c None 1 false chars
+  let update_chars c chars = update_relative_position c 1 chars
 
   (* Given the length of the input and a the get function of
      the input. count_newlines returns the number of newlines
@@ -166,7 +174,7 @@ module Make (Loc : LOC)
     let len = lb.lex_curr_pos - lb.lex_start_pos in
     let newlines, last_newline_offset = count_newlines len (Lexing.lexeme_char lb) in
     let chars = len - 1 - last_newline_offset in
-    update_location c None newlines false chars
+    update_relative_position c newlines chars
 
   let illegal_character c = mkERROR (String.make 1 c) (Illegal_character c)
 
@@ -301,7 +309,7 @@ module Make (Loc : LOC)
           ([^ '\n' '\r']* as com) (newline as nl)
                                 { let inum = int_of_string num in
                                   let nl = newline_of_string nl in
-                                  update_location c name inum true 0;
+                                  update_absolute_position c name inum;
                                   mkLINE_DIRECTIVE{l_blanks1=bl1;
                                                    l_zeros=String.length zeros;
                                                    l_linenum=inum;
