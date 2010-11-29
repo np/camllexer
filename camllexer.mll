@@ -178,6 +178,11 @@ module Make (Loc : LOC)
     ['0'-'9'] ['0'-'9' '_']*
     ('.' ['0'-'9' '_']* )?
     (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
+  let char_literal_no_nl =
+    ( [^ '\\' '\n' '\r']
+    | '\\' ( ['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
+           | ['0'-'9'] ['0'-'9'] ['0'-'9']
+           | 'x' hexa_char hexa_char ))
 
   (* Delimitors are extended (from 3.09) in a conservative way *)
 
@@ -232,11 +237,8 @@ module Make (Loc : LOC)
     | (int_literal as i) "n"                                    { mkNATIVEINT i }
     | '"'                  { with_curr_loc string c; mkSTRING (buff_contents c) }
     | "'" (newline as x) "'"                       { update_chars c 1; mkCHAR x }
-    | "'" ( [^ '\\' '\n' '\r']
-          | '\\' (['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
-                |['0'-'9'] ['0'-'9'] ['0'-'9']
-                |'x' hexa_char hexa_char) as x) "'"                  { mkCHAR x }
-    | ("'\\" (_ as c) as s)                { illegal_escape s (String.make 1 c) }
+    | "'" (char_literal_no_nl as s) "'"                              { mkCHAR s }
+    | "'\\" (_ as c) as s                  { illegal_escape s (String.make 1 c) }
     | "(*"                                   { store c; parse_comment comment c }
     | "(*)"
         { warn_comment_start c lexbuf;
@@ -315,10 +317,7 @@ module Make (Loc : LOC)
     | "''"                                              { store_parse comment c }
     | "'''"                                             { store_parse comment c }
     | "'" newline "'"                 { update_chars c 1; store_parse comment c }
-    | "'" [^ '\\' '\'' '\n' '\r' ] "'"                  { store_parse comment c }
-    | "'\\" ['\\' '"' '\'' 'n' 't' 'b' 'r' ' '] "'"     { store_parse comment c }
-    | "'\\" ['0'-'9'] ['0'-'9'] ['0'-'9'] "'"           { store_parse comment c }
-    | "'\\" 'x' hexa_char hexa_char "'"                 { store_parse comment c }
+    | "'" char_literal_no_nl "'"                        { store_parse comment c }
     | eof                                               { unterminated Ucomment }
     | newline                         { update_chars c 0; store_parse comment c }
     | _                                                 { store_parse comment c }
@@ -327,9 +326,7 @@ module Make (Loc : LOC)
       '"'                                                       { set_start_p c }
     | '\\' newline ([' ' '\t'] * as space)
                    { update_chars c (String.length space); store_parse string c }
-    | '\\' ['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']           { store_parse string c }
-    | '\\' ['0'-'9'] ['0'-'9'] ['0'-'9']                 { store_parse string c }
-    | '\\' 'x' hexa_char hexa_char                       { store_parse string c }
+    | char_literal_no_nl                                 { store_parse string c }
     | '\\' (_ as x)
         { if is_in_comment c || not c.warnings
           then store_parse string c

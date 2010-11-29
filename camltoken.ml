@@ -280,12 +280,14 @@ module Eval = struct
   let eof s i = if peek s i <> None then raise Backtrack
 
   let char s =
-    if String.length s = 1 then s.[0]
-    else if String.length s = 0 then failwith "invalid char token"
-    else if s.[0] <> '\\' then failwith "invalid char token"
-    else try let (c, i) = escaped_char s 1 in
-             eof s i; c
-         with Backtrack -> failwith "invalid char token"
+    match String.length s with
+    | 1 -> s.[0]
+    | 0 -> failwith "invalid char token"
+    | _ when s = "\r\n" -> '\n'
+    | _ when s.[0] <> '\\' -> failwith "invalid char token"
+    | _ -> try let (c, i) = escaped_char s 1 in
+               eof s i; c
+           with Backtrack -> failwith "invalid char token"
 
   let backslash_in_string strict store s i =
     match peek s i with
@@ -310,6 +312,7 @@ module Eval = struct
 end
 
 let literal_overflow tok ty = ERROR (tok, Literal_overflow ty)
+let illegal_escape tok s = ERROR (tok, Illegal_escape s)
 
 (* To convert integer literals, allowing max_int + 1 (PR#4210) *)
 
@@ -322,9 +325,11 @@ let cvt_int64_literal s =
 let cvt_nativeint_literal s =
   Nativeint.neg (Nativeint.of_string ("-" ^ String.sub s 0 (String.length s - 1)))
 
+let mkCHAR s = try CHAR(Eval.char s, s)
+               with Failure _ -> illegal_escape (sf "'%s'" s) s
 
-let mkCHAR       s = CHAR(Eval.char s, s)
-let mkSTRING     s = STRING(Eval.string s, s)
+let mkSTRING     s = try  STRING(Eval.string s, s)
+                     with Failure _ -> illegal_escape (sf "\"%s\"" s) s
 let mkINT        s = try  INT(cvt_int_literal s, s)
                      with Failure _ -> literal_overflow s "int"
 let mkINT32      s = try  INT32(cvt_int32_literal s, s)
