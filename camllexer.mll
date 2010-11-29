@@ -89,9 +89,10 @@ module Make (Loc : LOC)
     c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
 
   exception UnterminatedExn of unterminated
+  let unterminated s u = ERROR(s, Unterminated u)
 
-  let update_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
-  let with_curr_loc f c = f (update_loc c) c.lexbuf
+  let update_cxt_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
+  let with_curr_loc f c = f (update_cxt_loc c) c.lexbuf
   let parse_nested f c =
     with_curr_loc f c;
     set_start_p c;
@@ -99,10 +100,6 @@ module Make (Loc : LOC)
   let parse_comment comment c =
     try  COMMENT (parse_nested comment (in_comment c))
     with UnterminatedExn u -> ERROR (buff_contents c, Unterminated u)
-  let parse_string string c =
-    try with_curr_loc string c; mkSTRING (buff_contents c)
-    with UnterminatedExn Ustring ->
-      ERROR("\""^buff_contents c, Unterminated Ustring)
   let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
@@ -114,14 +111,13 @@ module Make (Loc : LOC)
         q_contents = contents }
     in
     let mkQUOTATION s = QUOTATION (mk (String.sub s 0 (String.length s - 2))) in
-    try  mkQUOTATION (parse_nested quotation (update_loc c))
+    try  mkQUOTATION (parse_nested quotation (update_cxt_loc c))
     with UnterminatedExn u ->
       ERROR (string_of_quotation (mk (buff_contents c)), Unterminated u)
 
-
   (* Update the current location with file name and line number. *)
 
-  let update_loc c file line absolute chars =
+  let update_location c file line absolute chars =
     let lexbuf = c.lexbuf in
     let pos = lexbuf.lex_curr_p in
     let new_file = match file with
@@ -134,11 +130,33 @@ module Make (Loc : LOC)
       pos_bol = pos.pos_cnum - chars;
     }
 
-  let update_chars c chars = update_loc c None 1 false chars
+  let update_chars c chars = update_location c None 1 false chars
 
-  let illegal_escape tok s = ERROR (tok, Illegal_escape s)
+  (* Given the length of the input and a the get function of
+     the input. count_newlines returns the number of newlines
+     and the offset of the last one. *)
+  let count_newlines len s =
+    let rec go count nl_off i =
+      if i >= len then (count, nl_off)
+      else
+        match s(i) with
+        | '\n' -> go (count + 1) i (i + 1)
+        | '\r' ->
+          if i + 1 < len && s(i + 1) = '\n' then
+            go (count + 1) (i + 1) (i + 2)
+          else
+            go (count + 1) i (i + 1)
+        | _ -> go count nl_off (i + 1)
+    in go 0 0 0
+
+  let update_loc c =
+    let lb = c.lexbuf in
+    let len = lb.lex_curr_pos - lb.lex_start_pos in
+    let newlines, last_newline_offset = count_newlines len (Lexing.lexeme_char lb) in
+    let chars = len - 1 - last_newline_offset in
+    update_location c None newlines false chars
+
   let illegal_character c = ERROR (String.make 1 c, Illegal_character c)
-  let unterminated u = raise (UnterminatedExn u)
 
   let warn msg loc =
     Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) msg
@@ -182,11 +200,16 @@ module Make (Loc : LOC)
     ['0'-'9'] ['0'-'9' '_']*
     ('.' ['0'-'9' '_']* )?
     (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
-  let char_literal_no_nl =
-    ( [^ '\\' '\n' '\r']
+  let char_literal_no_nl_quote =
+    ( [^ '\\' '\n' '\r' '"']
     | '\\' ( ['\\' '"' 'n' 't' 'b' 'r' ' ' '\'']
            | ['0'-'9'] ['0'-'9'] ['0'-'9']
            | 'x' hexa_char hexa_char ))
+  let char_litteral = char_literal_no_nl_quote | '"' | newline | ('\\' _)
+  let char = "'" char_litteral "'"
+  let string_char = char_literal_no_nl_quote | newline | ('\\' _)
+  let string = '"' string_char* '"'
+  let unterminated_string = '"' string_char* '\\'? eof
 
   (* Delimitors are extended (from 3.09) in a conservative way *)
 
@@ -239,10 +262,10 @@ module Make (Loc : LOC)
     | (int_literal as i) "l"                                        { mkINT32 i }
     | (int_literal as i) "L"                                        { mkINT64 i }
     | (int_literal as i) "n"                                    { mkNATIVEINT i }
-    | '"'                                               { parse_string string c }
-    | "'" (newline as x) "'"                       { update_chars c 1; mkCHAR x }
-    | "'" (char_literal_no_nl as s) "'"                              { mkCHAR s }
-    | "'\\" (_ as c) as s                  { illegal_escape s (String.make 1 c) }
+    | '"' (string_char* as s) '"'                    { update_loc c; mkSTRING s }
+    | unterminated_string as s                         {           update_loc c ;
+                                                         unterminated s Ustring }
+    | "'" (char_litteral as s) "'"                     { update_loc c; mkCHAR s }
     | "(*"                                   { store c; parse_comment comment c }
     | "(*)"                                  { warn_comment_start c lexbuf      ;
                                                store c; parse_comment comment c }
@@ -266,7 +289,7 @@ module Make (Loc : LOC)
           ([^ '\n' '\r']* as com) (newline as nl)
                                 { let inum = int_of_string num in
                                   let nl = newline_of_string nl in
-                                  update_loc c name inum true 0;
+                                  update_location c name inum true 0;
                                   LINE_DIRECTIVE{l_blanks1=bl1;
                                                  l_zeros=String.length zeros;
                                                  l_linenum=inum;
@@ -308,41 +331,14 @@ module Make (Loc : LOC)
               { store c;
                 if quotations c then with_curr_loc quotation c; parse comment c }
     | ident                                             { store_parse comment c }
-    | "\""
-        { store c;
-          begin try with_curr_loc string c
-          with UnterminatedExn Ustring ->
-            raise (UnterminatedExn Ustring_in_comment)
-          end;
-          Buffer.add_char c.buffer '"';
-          parse comment c }
+    | string                              { update_loc c; store_parse comment c }
+    | unterminated_string          {                      update_loc c; store c ;
+                                     raise (UnterminatedExn Ustring_in_comment) }
     | "''"                                              { store_parse comment c }
-    | "'''"                                             { store_parse comment c }
-    | "'" newline "'"                 { update_chars c 1; store_parse comment c }
-    | "'" char_literal_no_nl "'"                        { store_parse comment c }
-    | eof                                               { unterminated Ucomment }
+    | char                                { update_loc c; store_parse comment c }
+    | eof                                    { raise (UnterminatedExn Ucomment) }
     | newline                         { update_chars c 0; store_parse comment c }
     | _                                                 { store_parse comment c }
-
-  and string c = parse
-      '"'                                                       { set_start_p c }
-    | '\\' newline ([' ' '\t'] * as space)
-                   { update_chars c (String.length space); store_parse string c }
-    | char_literal_no_nl                                 { store_parse string c }
-    | '\\' (_ as x)
-        { if is_in_comment c || not c.warnings
-          then store_parse string c
-          else begin
-(*
-            TODO
-*)
-            warn (string_of_error (Illegal_escape (String.make 1 x)))
-                 (Loc.of_lexbuf lexbuf);
-            store_parse string c
-          end }
-    | newline                          { update_chars c 0; store_parse string c }
-    | eof                                                { unterminated Ustring }
-    | _                                                  { store_parse string c }
 
   and symbolchar_star beginning c = parse
     | symbolchar* as tok            { move_start_p (-String.length beginning) c ;
@@ -366,7 +362,7 @@ module Make (Loc : LOC)
                                                       with_curr_loc quotation c ;
                                                               parse quotation c }
     | ">>"                                                            { store c }
-    | eof                                             { unterminated Uquotation }
+    | eof                                  { raise (UnterminatedExn Uquotation) }
     | newline                       { update_chars c 0; store_parse quotation c }
     | _                                               { store_parse quotation c }
 
@@ -378,7 +374,7 @@ module Make (Loc : LOC)
 
   and antiquot name c = parse
     | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
-    | eof   { ERROR(sf "$%s:%s" name (buff_contents c), Unterminated Uantiquot) }
+    | eof         { unterminated (sf "$%s:%s" name (buff_contents c)) Uantiquot }
     | newline                 { update_chars c 0; store_parse (antiquot name) c }
     | '<' (':' ident)? ('@' locname)? '<'
       { store c; with_curr_loc quotation c; parse (antiquot name) c             }
