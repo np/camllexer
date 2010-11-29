@@ -240,10 +240,8 @@ module Make (Loc : LOC)
     | "'" (char_literal_no_nl as s) "'"                              { mkCHAR s }
     | "'\\" (_ as c) as s                  { illegal_escape s (String.make 1 c) }
     | "(*"                                   { store c; parse_comment comment c }
-    | "(*)"
-        { warn_comment_start c lexbuf;
-        (* TODO: why not using parse_comment here? *)
-         parse (fun c lb -> comment c lb; COMMENT (buff_contents c)) (in_comment c) }
+    | "(*)"                                  { warn_comment_start c lexbuf      ;
+                                               store c; parse_comment comment c }
     | "<<" (quotchar* as beginning)
       { if quotations c
         then (move_start_p (-String.length beginning) c;
