@@ -169,13 +169,13 @@ module Eval : sig
   val char : string -> char
       (** Convert a char token, where the escape sequences (backslashes)
           remain to be interpreted; raise [Failure] if an
-          incorrect backslash sequence is found; [Token.Eval.char (Char.escaped c)]
+          incorrect backslash sequence is found; [Camltoken.Eval.char (Char.escaped c)]
           returns [c] *)
 
   val string : ?strict:unit -> string -> string
-      (** [Taken.Eval.string strict s]
+      (** [Camltoken.Eval.string strict s]
           Convert a string token, where the escape sequences (backslashes)
           remain to be interpreted; raise [Failure] if [strict] and an
           incorrect backslash sequence is found;
-          [Token.Eval.string strict (String.escaped s)] returns [s] *)
+          [Camltoken.Eval.string strict (String.escaped s)] returns [s] *)
 end
