@@ -412,7 +412,7 @@ module Make (Loc : LOC)
   let from_context c =
     let tok = with_curr_loc token c in
     let loc = Loc.of_lexbuf c.lexbuf in
-    Some (tok, loc)
+    if tok = EOI then None else Some (tok, loc)
 
   let from_lexbuf ~quotations ~antiquotations ~warnings lb =
     let c = { (default_context lb) with
