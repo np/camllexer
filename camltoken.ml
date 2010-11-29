@@ -54,7 +54,7 @@ and newline = LF | CR | CRLF
 and error =
   | Illegal_character of char
   | Illegal_escape    of string
-  | Unterminated      of unterminated
+  | Unterminated      of unterminated list
   | Literal_overflow  of string
 (*
   | Comment_start
@@ -64,7 +64,6 @@ and error =
 and unterminated =
   | Ucomment
   | Ustring
-  | Ustring_in_comment
   | Uquotation
   | Uantiquot
 
@@ -82,11 +81,13 @@ let sf = Printf.sprintf
 
 let string_of_unterminated =
   function
-  | Ucomment           -> "Comment not terminated"
-  | Ustring            -> "String literal not terminated"
-  | Ustring_in_comment -> "This comment contains an unterminated string literal"
-  | Uquotation         -> "Quotation not terminated"
-  | Uantiquot          -> "Antiquotation not terminated"
+  | Ucomment           -> "comment"
+  | Ustring            -> "string literal"
+  | Uquotation         -> "quotation"
+  | Uantiquot          -> "antiquotation"
+
+let string_of_unterminated_list us =
+  String.concat " of " (List.map string_of_unterminated us)
 
 let string_of_error =
   function
@@ -94,8 +95,12 @@ let string_of_error =
       sf "Illegal character (%s)" (Char.escaped c)
   | Illegal_escape s ->
       sf "Illegal backslash escape in string or character (%s)" s
-  | Unterminated u ->
-      string_of_unterminated u
+  | Unterminated [u] ->
+      sf "Unterminated %s" (string_of_unterminated u)
+  | Unterminated (u :: us) ->
+      sf "This %s contains an unterminated %s" (string_of_unterminated_list us) (string_of_unterminated u)
+  | Unterminated [] ->
+      assert false
   | Literal_overflow ty ->
       sf "Integer literal exceeds the range of representable integers of type %s" ty
 
@@ -103,7 +108,6 @@ let show_unterminated =
   function
   | Ucomment           -> "Ucomment"
   | Ustring            -> "Ustring"
-  | Ustring_in_comment -> "Ustring_in_comment"
   | Uquotation         -> "Uquotation"
   | Uantiquot          -> "Uantiquot"
 
@@ -112,7 +116,7 @@ let show_error =
   function
   | Illegal_character _ -> ("Illegal_character", [])
   | Illegal_escape s    -> ("Illegal_escape",    [s])
-  | Unterminated u      -> ("Unterminated",      [show_unterminated u])
+  | Unterminated us     -> ("Unterminated",      List.map show_unterminated us)
   | Literal_overflow ty -> ("Literal_overflow",  [ty])
 
 let string_of_quotation {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
@@ -362,6 +366,13 @@ let mkLINE_DIRECTIVE ?(bl1="") ?(bl2="") ?(zeros="0") ?s ?(com="") ?(nl="\n") i 
   LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=int_of_string i;
                  l_blanks2=bl2;l_filename=s;l_comment=com;l_newline=nl}
 
+let unterminated_of_string = function
+  | "Ucomment"           -> Ucomment
+  | "Ustring"            -> Ustring
+  | "Uquotation"         -> Uquotation
+  | "Uantiquot"          -> Uantiquot
+  | _                    -> raise Exit
+
 let token_of_strings = function
   | "KEYWORD", [s]           -> Some (KEYWORD s)
   | "SYMBOL", [s]            -> Some (SYMBOL s)
@@ -394,15 +405,10 @@ let token_of_strings = function
       | "Illegal_character", []  -> assert (tok <> ""); mk (Illegal_character tok.[0])
       | "Illegal_escape",    [s] -> mk (Illegal_escape s)
       | "Literal_overflow",  [t] -> mk (Literal_overflow t)
-      | "Unterminated",      [u] ->
-          begin match u with
-          | "Ucomment"           -> mk (Unterminated Ucomment)
-          | "Ustring"            -> mk (Unterminated Ustring)
-          | "Ustring_in_comment" -> mk (Unterminated Ustring_in_comment)
-          | "Uquotation"         -> mk (Unterminated Uquotation)
-          | "Uantiquot"          -> mk (Unterminated Uantiquot)
-          | _                    -> None
-          end
+      | "Unterminated",      us  ->
+            begin try mk (Unterminated (List.map unterminated_of_string us))
+            with Exit -> None
+            end
       | _ -> None
       end
   | "PSYMBOL", [x; y; z]     -> Some (PSYMBOL (x,y,z))

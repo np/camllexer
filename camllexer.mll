@@ -46,24 +46,25 @@ module Make (Loc : LOC)
 
   (* To store some context information:
   *   loc       : position of the beginning of a string, quotation and comment
-  *   in_comment: are we in a comment?
+  *   stack     : what is our call stack?
   *   quotations: shall we lex quotation?
   *               If quotations is false it's a SYMBOL token.
   *   antiquots : shall we lex antiquotations.
   *)
 
   type context =
-  { loc        : Loc.t    ;
-    in_comment : bool     ;
-    quotations : bool     ;
-    antiquots  : bool     ;
-    warnings   : bool     ;
-    lexbuf     : lexbuf   ;
-    buffer     : Buffer.t }
+  { loc        : Loc.t
+  ; stack      : unterminated list
+  ; quotations : bool
+  ; antiquots  : bool
+  ; warnings   : bool
+  ; lexbuf     : lexbuf
+  ; buffer     : Buffer.t
+  }
 
   let default_context lb =
   { loc        = Loc.ghost ;
-    in_comment = false     ;
+    stack      = []        ;
     quotations = true      ;
     antiquots  = false     ;
     warnings   = true      ;
@@ -81,28 +82,28 @@ module Make (Loc : LOC)
   let loc c = Loc.merge c.loc (Loc.of_lexbuf c.lexbuf)
   let quotations c = c.quotations
   let antiquots c = c.antiquots
-  let is_in_comment c = c.in_comment
-  let in_comment c = { (c) with in_comment = true }
   let set_start_p c = c.lexbuf.lex_start_p <- Loc.start_pos c.loc
   let move_start_p shift c =
     let p = c.lexbuf.lex_start_p in
     c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
 
-  exception UnterminatedExn of unterminated
   let unterminated s u = ERROR(s, Unterminated u)
 
   let update_cxt_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
   let with_curr_loc f c = f (update_cxt_loc c) c.lexbuf
-  let parse_nested f c =
-    with_curr_loc f c;
-    set_start_p c;
-    buff_contents c
+  let with_curr_loc_in frame f c = f { (c) with loc = Loc.of_lexbuf c.lexbuf
+                                     ;          stack = frame :: c.stack } c.lexbuf
   let parse_comment comment c =
-    try  COMMENT (parse_nested comment (in_comment c))
-    with UnterminatedExn u -> ERROR (buff_contents c, Unterminated u)
+    let r = with_curr_loc_in Ucomment comment c in
+    set_start_p c;
+    let contents = buff_contents c in
+    match r with
+    | [] -> COMMENT contents
+    | us -> unterminated contents us
   let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
+  let parse' f c () = f c c.lexbuf
   let mk_quotation quotation c name loc shift =
     let mk contents =
       { q_name     = name     ;
@@ -111,9 +112,16 @@ module Make (Loc : LOC)
         q_contents = contents }
     in
     let mkQUOTATION s = QUOTATION (mk (String.sub s 0 (String.length s - 2))) in
-    try  mkQUOTATION (parse_nested quotation (update_cxt_loc c))
-    with UnterminatedExn u ->
-      ERROR (string_of_quotation (mk (buff_contents c)), Unterminated u)
+    let r = with_curr_loc_in Uquotation quotation c in
+    set_start_p c;
+    let contents = buff_contents c in
+    match r with
+    | [] -> mkQUOTATION contents
+    | us -> unterminated (string_of_quotation (mk contents)) us
+
+  let (&) x f = match x with
+   | [] -> f ()
+   | us -> us
 
   (* Update the current location with file name and line number. *)
 
@@ -263,8 +271,8 @@ module Make (Loc : LOC)
     | (int_literal as i) "L"                                        { mkINT64 i }
     | (int_literal as i) "n"                                    { mkNATIVEINT i }
     | '"' (string_char* as s) '"'                    { update_loc c; mkSTRING s }
-    | unterminated_string as s                         {           update_loc c ;
-                                                         unterminated s Ustring }
+    | unterminated_string as s                       {             update_loc c ;
+                                                       unterminated s [Ustring] }
     | "'" (char_litteral as s) "'"                     { update_loc c; mkCHAR s }
     | "(*"                                   { store c; parse_comment comment c }
     | "(*)"                                  { warn_comment_start c lexbuf      ;
@@ -324,19 +332,21 @@ module Make (Loc : LOC)
     | _ as c                                              { illegal_character c }
 
   and comment c = parse
-      "(*"
-                            { store c; with_curr_loc comment c; parse comment c }
-    | "*)"                                                            { store c }
+      "(*"                               {                              store c ;
+                                            with_curr_loc_in Ucomment comment c &
+                                                               parse' comment c }
+    | "*)"                                                        { store c; [] }
     | '<' (':' ident)? ('@' locname)? '<'
-              { store c;
-                if quotations c then with_curr_loc quotation c; parse comment c }
+                { store c;
+                  (if quotations c then
+                    with_curr_loc_in Uquotation quotation c else []) &
+                  parse' comment c }
     | ident                                             { store_parse comment c }
     | string                              { update_loc c; store_parse comment c }
-    | unterminated_string          {                      update_loc c; store c ;
-                                     raise (UnterminatedExn Ustring_in_comment) }
+    | unterminated_string           { update_loc c; store c; Ustring :: c.stack }
     | "''"                                              { store_parse comment c }
     | char                                { update_loc c; store_parse comment c }
-    | eof                                    { raise (UnterminatedExn Ucomment) }
+    | eof                                                             { c.stack }
     | newline                         { update_chars c 0; store_parse comment c }
     | _                                                 { store_parse comment c }
 
@@ -358,11 +368,11 @@ module Make (Loc : LOC)
     | symbolchar* as tok                                   { SYMBOL("<:" ^ tok) }
 
   and quotation c = parse
-    | '<' (':' ident)? ('@' locname)? '<'    {                          store c ;
-                                                      with_curr_loc quotation c ;
-                                                              parse quotation c }
-    | ">>"                                                            { store c }
-    | eof                                  { raise (UnterminatedExn Uquotation) }
+    | '<' (':' ident)? ('@' locname)? '<'           {                   store c ;
+                                        with_curr_loc_in Uquotation quotation c &
+                                                             parse' quotation c }
+    | ">>"                                                        { store c; [] }
+    | eof                                                             { c.stack }
     | newline                       { update_chars c 0; store_parse quotation c }
     | _                                               { store_parse quotation c }
 
@@ -374,10 +384,12 @@ module Make (Loc : LOC)
 
   and antiquot name c = parse
     | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
-    | eof         { unterminated (sf "$%s:%s" name (buff_contents c)) Uantiquot }
+    | eof       { unterminated (sf "$%s:%s" name (buff_contents c)) [Uantiquot] }
     | newline                 { update_chars c 0; store_parse (antiquot name) c }
     | '<' (':' ident)? ('@' locname)? '<'
-      { store c; with_curr_loc quotation c; parse (antiquot name) c             }
+      { store c; match with_curr_loc_in Uquotation quotation c with
+                 | [] -> parse (antiquot name) c
+                 | stack -> unterminated (buff_contents c) stack  }
     | _                                         { store_parse (antiquot name) c }
 
   {

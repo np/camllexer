@@ -94,13 +94,12 @@ and newline = LF | CR | CRLF
 and error =
   | Illegal_character of char
   | Illegal_escape    of string
-  | Unterminated      of unterminated
+  | Unterminated      of unterminated list
   | Literal_overflow  of string
 
 and unterminated =
   | Ucomment
   | Ustring
-  | Ustring_in_comment
   | Uquotation
   | Uantiquot
 
