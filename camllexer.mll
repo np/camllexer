@@ -99,6 +99,10 @@ module Make (Loc : LOC)
   let parse_comment comment c =
     try  COMMENT (parse_nested comment (in_comment c))
     with UnterminatedExn u -> ERROR (buff_contents c, Unterminated u)
+  let parse_string string c =
+    try with_curr_loc string c; mkSTRING (buff_contents c)
+    with UnterminatedExn Ustring ->
+      ERROR("\""^buff_contents c, Unterminated Ustring)
   let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
@@ -235,7 +239,7 @@ module Make (Loc : LOC)
     | (int_literal as i) "l"                                        { mkINT32 i }
     | (int_literal as i) "L"                                        { mkINT64 i }
     | (int_literal as i) "n"                                    { mkNATIVEINT i }
-    | '"'                  { with_curr_loc string c; mkSTRING (buff_contents c) }
+    | '"'                                               { parse_string string c }
     | "'" (newline as x) "'"                       { update_chars c 1; mkCHAR x }
     | "'" (char_literal_no_nl as s) "'"                              { mkCHAR s }
     | "'\\" (_ as c) as s                  { illegal_escape s (String.make 1 c) }
@@ -374,7 +378,7 @@ module Make (Loc : LOC)
 
   and antiquot name c = parse
     | '$'                      { set_start_p c; ANTIQUOT(name, buff_contents c) }
-    | eof  { ERROR (sf "$%s:%s" name (buff_contents c), Unterminated Uantiquot) }
+    | eof   { ERROR(sf "$%s:%s" name (buff_contents c), Unterminated Uantiquot) }
     | newline                 { update_chars c 0; store_parse (antiquot name) c }
     | '<' (':' ident)? ('@' locname)? '<'
       { store c; with_curr_loc quotation c; parse (antiquot name) c             }
