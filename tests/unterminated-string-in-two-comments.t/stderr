@@ -1,1 +1,1 @@
-Error: File "input.ml", line 1, characters 0-8 (end at line 2, character 0): Comment not terminated
+Error: File "input.ml", line 1, characters 0-8 (end at line 2, character 0): This comment of comment contains an unterminated string literal

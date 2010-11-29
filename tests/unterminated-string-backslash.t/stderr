@@ -1,1 +1,1 @@
-Error: File "input.ml", line 1, characters 0-2: String literal not terminated
+Error: File "input.ml", line 1, characters 0-2: Unterminated string literal
