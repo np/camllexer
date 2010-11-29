@@ -29,21 +29,29 @@ module type LOC = sig
   exception Exc_located of t * exn
   val raise : t -> exn -> 'a
 end
+
+type 'a iterator = unit -> 'a option
+
 module Make : functor (Loc : LOC) -> sig
+  type token = Camltoken.caml_token * Loc.t
+
+  val setup_loc : Lexing.lexbuf -> Loc.t -> unit
+
   val from_lexbuf :
     quotations:bool ->
     antiquotations:bool ->
     warnings:bool ->
-    Lexing.lexbuf -> (Camltoken.caml_token * Loc.t) Stream.t
-  val setup_loc : Lexing.lexbuf -> Loc.t -> unit
+    Lexing.lexbuf -> token iterator
+
   val from_string :
     quotations:bool ->
     antiquotations:bool ->
     warnings:bool ->
-    Loc.t -> string -> (Camltoken.caml_token * Loc.t) Stream.t
+    Loc.t -> string -> token iterator
+
   val from_stream :
     quotations:bool ->
     antiquotations:bool ->
     warnings:bool ->
-    Loc.t -> char Stream.t -> (Camltoken.caml_token * Loc.t) Stream.t
+    Loc.t -> char Stream.t -> token iterator
 end

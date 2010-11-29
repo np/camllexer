@@ -24,6 +24,8 @@
 
 open Camltoken
 
+type 'a iterator = unit -> 'a option
+
 (* See loc.mli for actual documentation *)
 module type LOC = sig
   type t
@@ -43,6 +45,8 @@ module Make (Loc : LOC)
 = struct
 
   open Lexing
+
+  type token = (caml_token * Loc.t)
 
   (* To store some context information:
   *   loc       : position of the beginning of a string, quotation and comment
@@ -408,11 +412,9 @@ module Make (Loc : LOC)
     self 0 s
 
   let from_context c =
-    let next _ =
-      let tok = with_curr_loc token c in
-      let loc = Loc.of_lexbuf c.lexbuf in
-      Some ((tok, loc))
-    in Stream.from next
+    let tok = with_curr_loc token c in
+    let loc = Loc.of_lexbuf c.lexbuf in
+    Some (tok, loc)
 
   let from_lexbuf ~quotations ~antiquotations ~warnings lb =
     let c = { (default_context lb) with
@@ -421,7 +423,7 @@ module Make (Loc : LOC)
               quotations = quotations;
               warnings   = warnings
             }
-    in from_context c
+    in fun () -> from_context c
 
   let setup_loc lb loc =
     let start_pos = Loc.start_pos loc in
