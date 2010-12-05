@@ -417,10 +417,21 @@ module Make (Loc : LOC)
         1
     | _ -> 0
 
+  (* I do not really know what to do about the ``end of input''.
+     I see various options:
+       1/ The output stream is infinite and repeats EOI indefinitely
+          because each time we give eof to the token rule it gives
+          us EOI.
+       2/ The output stream terminates with a single EOI token.
+       3/ The output stream terminates without outputing any EOI token.
+
+    Previously it was 1/, and know it is 3/. Implenting 2/ would require
+    some state.
+   *)
   let from_context c =
     let tok = with_curr_loc token c in
     let loc = Loc.of_lexbuf c.lexbuf in
-    if tok = EOI then None else Some (tok, loc)
+    if tok = eoi then None else Some (tok, loc)
 
   let from_lexbuf ~quotations ~antiquotations ~warnings lb =
     let c = { (default_context lb) with
