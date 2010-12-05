@@ -54,7 +54,7 @@ and newline = LF | CR | CRLF
 and error =
   | Illegal_character of char
   | Illegal_escape    of string
-  | Unterminated      of unterminated list
+  | Unterminated      of (Lexing.position * unterminated) list
   | Literal_overflow  of string
 (*
   | Comment_start
@@ -95,9 +95,10 @@ let string_of_error =
       sf "Illegal character (%s)" (Char.escaped c)
   | Illegal_escape s ->
       sf "Illegal backslash escape in string or character (%s)" s
-  | Unterminated [u] ->
+  | Unterminated [(_,u)] ->
       sf "Unterminated %s" (string_of_unterminated u)
-  | Unterminated (u :: us) ->
+  | Unterminated ((_,u) :: us) ->
+      let us = List.map snd us in
       sf "This %s contains an unterminated %s" (string_of_unterminated_list us) (string_of_unterminated u)
   | Unterminated [] ->
       assert false
@@ -106,17 +107,22 @@ let string_of_error =
 
 let show_unterminated =
   function
-  | Ucomment           -> "Ucomment"
-  | Ustring            -> "Ustring"
-  | Uquotation         -> "Uquotation"
-  | Uantiquot          -> "Uantiquot"
+  | Ucomment           -> ["Ucomment"]
+  | Ustring            -> ["Ustring"]
+  | Uquotation         -> ["Uquotation"]
+  | Uantiquot          -> ["Uantiquot"]
+
+let show_position { Lexing.pos_fname=fp; pos_lnum=ln; pos_bol=bol; pos_cnum=cn } =
+  [fp; string_of_int ln; string_of_int bol; string_of_int cn]
+
+let show2 s1 s2 (x, y) = s1 x @ s2 y
 
 (* meant to be used by show_token/strings_of_token *)
 let show_error =
   function
   | Illegal_character _ -> ("Illegal_character", [])
   | Illegal_escape s    -> ("Illegal_escape",    [s])
-  | Unterminated us     -> ("Unterminated",      List.map show_unterminated us)
+  | Unterminated us     -> ("Unterminated",      List.concat (List.map (show2 show_position show_unterminated) us))
   | Literal_overflow ty -> ("Literal_overflow",  [ty])
 
 let string_of_quotation {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
@@ -385,12 +391,76 @@ let mkLINE_DIRECTIVE' ?(bl1="") ?(bl2="") ?(zeros="0") ?s ?(com="") ?(nl="\n") i
   LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=int_of_string i;
                  l_blanks2=bl2;l_filename=s;l_comment=com;l_newline=nl}
 
-let unterminated_of_string = function
-  | "Ucomment"           -> Ucomment
-  | "Ustring"            -> Ustring
-  | "Uquotation"         -> Uquotation
-  | "Uantiquot"          -> Uantiquot
-  | _                    -> raise Exit
+module ParseLib = struct
+  exception ParseFailure
+
+  let pure x input = (x, input)
+  let fail _input = raise ParseFailure
+
+  let parse_elt = function
+    | x :: xs -> (x, xs)
+    | input -> fail input
+
+  let pmap f p input =
+    let (x, input) = p input in
+    (f x, input)
+
+  let pmapf f p input =
+    let (x, input) = p input in
+    match f x with
+    | Some r -> (r, input)
+    | None -> fail input
+
+  let (<*>) pf px input =
+    let (f, input) = pf input in
+    let (x, input) = px input in
+    (f x, input)
+
+  let parse_int =
+    let safe_int_of_string x =
+      try Some (int_of_string x)
+      with Failure _ -> None
+    in
+    pmapf safe_int_of_string parse_elt
+
+  let try_parse p input =
+    match try Some (p input) with ParseFailure -> None with
+    | Some (x, input) -> (Some x, input)
+    | None -> (None, input)
+
+  let rec parse_list p input =
+    let (xopt, input) = try_parse p input in
+    match xopt with
+    | Some x -> pmap (fun xs -> x :: xs) (parse_list p) input
+    | None -> ([], input)
+
+  let parse_full p input =
+    let (x, input) = try_parse p input in
+    if input = [] then x else None
+end
+open ParseLib
+
+let parse_unterminated =
+  let f = function
+    | "Ucomment"           -> Some Ucomment
+    | "Ustring"            -> Some Ustring
+    | "Uquotation"         -> Some Uquotation
+    | "Uantiquot"          -> Some Uantiquot
+    | _                    -> None
+  in
+  pmapf f parse_elt
+
+let parse_position =
+  let mk_position fp ln bol cn =
+    { Lexing.pos_fname=fp; pos_lnum=ln; pos_bol=bol; pos_cnum=cn }
+  in
+  pmap mk_position parse_elt <*> parse_int <*> parse_int <*> parse_int
+
+let parse_position_unterminated =
+  pmap (fun x y -> x,y) parse_position <*> parse_unterminated
+
+let parse_position_unterminated_list =
+  parse_list parse_position_unterminated
 
 let token_of_strings = function
   | "KEYWORD", [s]           -> Some (KEYWORD s)
@@ -425,9 +495,10 @@ let token_of_strings = function
       | "Illegal_escape",    [s] -> mk (Illegal_escape s)
       | "Literal_overflow",  [t] -> mk (Literal_overflow t)
       | "Unterminated",      us  ->
-            begin try mk (Unterminated (List.map unterminated_of_string us))
-            with Exit -> None
-            end
+          begin match parse_full parse_position_unterminated_list us with
+          | Some x -> mk (Unterminated x)
+          | None -> None
+          end
       | _ -> None
       end
   | "PSYMBOL", [x; y; z]     -> Some (PSYMBOL (x,y,z))

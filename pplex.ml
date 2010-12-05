@@ -34,17 +34,18 @@ let rec strings =
   | [<>] -> []
 
 exception LexError of error
-exception PPLexParseError
+exception Unexpected_token of caml_token
+exception Token_of_strings_error of string * string list
 
 let rec unparse_tokens =
   parser
   | [< '(UIDENT name, loc); args = strings; '(NEWLINE _,_); strm >] ->
       begin match token_of_strings (name, args) with
       | Some x -> [< '(x,loc); unparse_tokens strm >]
-      | None   -> Loc.raise loc PPLexParseError
+      | None   -> Loc.raise loc (Token_of_strings_error (name, args))
       end
   | [< '(EOI,loc) >] -> [< '(eoi,loc) >]
-  | [< '(_,loc) >] -> Loc.raise loc PPLexParseError
+  | [< '(tok,loc) >] -> Loc.raise loc (Unexpected_token tok)
   | [<>] -> [<>]
 
 let main () =
@@ -84,9 +85,14 @@ let main () =
   let ic = if filename = "-" then stdin else open_in filename in
   let next = Lex.from_channel ~quotations ~antiquotations ~warnings loc ic in
   let strm = Stream.from (fun _ -> next ()) in
+  let loc_of_unterminated loc = function
+    | (pos, _) :: _ -> Loc.of_postions pos (Loc.stop_pos loc)
+    | [] -> loc
+  in
   let dont_raise_errors f (x, loc) = f loc x in
   let raise_errors f (x, loc) =
     match x with
+    | ERROR(_, (Unterminated us as err)) -> Loc.raise (loc_of_unterminated loc us) (LexError err)
     | ERROR(_, err) -> Loc.raise loc (LexError err)
     | _ -> f loc x
   in
@@ -101,7 +107,9 @@ let main () =
   let print_token _ x = print_string (string_of_token x) in
   let rec string_of_exn = function
     | LexError err    -> string_of_error err
-    | PPLexParseError -> "Unexpected token"
+    | Token_of_strings_error (name, args) ->
+        sf "Parse Error: %s %s" name (String.concat " " (List.map String.escaped args))
+    | Unexpected_token tok -> sf "Unpexcted token: %s" (string_of_token tok)
     | Stream.Error "" -> "Unknown stream error"
     | Stream.Error msg -> sf "Stream Error: %s" msg
     | Loc.Exc_located(loc, exn) ->

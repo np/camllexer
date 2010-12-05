@@ -29,6 +29,9 @@ val ghost : t
 
 (** {6 Conversion functions} *)
 
+(** Return a location from a couple of postitions. *)
+val of_postions : Lexing.position -> Lexing.position -> t
+
 (** Return a location from ocamllex buffer. *)
 val of_lexbuf : Lexing.lexbuf -> t
 
@@ -45,6 +48,9 @@ val move_both : int -> t -> t
 
 (** Return the start position as a Lexing.position. *)
 val start_pos  : t -> Lexing.position
+
+(** Return the stop position as a Lexing.position. *)
+val stop_pos  : t -> Lexing.position
 
 (** {6 Printing} *)
 

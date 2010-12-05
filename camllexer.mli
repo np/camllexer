@@ -22,7 +22,6 @@ module type LOC = sig
   type t
   val ghost : t
   val of_lexbuf : Lexing.lexbuf -> t
-  val merge : t -> t -> t
   val move_both : int -> t -> t
   val start_pos : t -> Lexing.position
   val to_string : t -> string

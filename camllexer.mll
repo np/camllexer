@@ -31,7 +31,6 @@ module type LOC = sig
   type t
   val ghost : t
   val of_lexbuf : Lexing.lexbuf -> t
-  val merge : t -> t -> t
   val move_both : int -> t -> t
   val start_pos  : t -> Lexing.position
   val to_string : t -> string
@@ -49,7 +48,6 @@ module Make (Loc : LOC)
   type token = (caml_token * Loc.t)
 
   (* To store some context information:
-  *   loc       : position of the beginning of a string, quotation and comment
   *   stack     : what is our call stack?
   *   quotations: shall we lex quotation?
   *               If quotations is false it's a SYMBOL token.
@@ -57,8 +55,7 @@ module Make (Loc : LOC)
   *)
 
   type context =
-  { loc        : Loc.t
-  ; stack      : unterminated list
+  { stack      : (position * unterminated) list
   ; quotations : bool
   ; antiquots  : bool
   ; warnings   : bool
@@ -67,8 +64,7 @@ module Make (Loc : LOC)
   }
 
   let default_context lb =
-  { loc        = Loc.ghost ;
-    stack      = []        ;
+  { stack      = []        ;
     quotations = true      ;
     antiquots  = false     ;
     warnings   = true      ;
@@ -78,33 +74,34 @@ module Make (Loc : LOC)
   (* To buffer string literals, quotations and antiquotations *)
 
   let store c = Buffer.add_string c.buffer (Lexing.lexeme c.lexbuf)
-  let istore_char c i = Buffer.add_char c.buffer (Lexing.lexeme_char c.lexbuf i)
   let buff_contents c =
     let contents = Buffer.contents c.buffer in
     Buffer.reset c.buffer; contents
 
-  let loc c = Loc.merge c.loc (Loc.of_lexbuf c.lexbuf)
   let quotations c = c.quotations
   let antiquots c = c.antiquots
-  let set_start_p c = c.lexbuf.lex_start_p <- Loc.start_pos c.loc
+  let set_sp c sp = c.lexbuf.lex_start_p <- sp
+  let get_sp c = c.lexbuf.lex_start_p
   let move_start_p shift c =
     let p = c.lexbuf.lex_start_p in
     c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
 
   let unterminated s u = mkERROR s (Unterminated u)
+  let unterminated1 s u c = unterminated s [(get_sp c, u)]
 
-  let update_cxt_loc c = { (c) with loc = Loc.of_lexbuf c.lexbuf }
-  let with_curr_loc f c = f (update_cxt_loc c) c.lexbuf
-  let with_curr_loc_in frame f c = f { (c) with loc = Loc.of_lexbuf c.lexbuf
-                                     ;          stack = frame :: c.stack } c.lexbuf
+  let parse_with_sp f c =
+    let sp = get_sp c in
+    let r = f c c.lexbuf in
+    set_sp c sp; r
+  let parse_in frame f c = f { c with stack = (c.lexbuf.lex_start_p, frame) :: c.stack } c.lexbuf
   let parse_comment comment c =
-    let r = with_curr_loc_in Ucomment comment c in
-    set_start_p c;
+    let sp = c.lexbuf.lex_start_p in
+    let r = parse_in Ucomment comment c in
     let contents = buff_contents c in
+    c.lexbuf.lex_start_p <- sp;
     match r with
     | [] -> mkCOMMENT contents
     | us -> unterminated contents us
-  let shift n c = { (c) with loc = Loc.move_both n c.loc }
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
   let parse' f c () = f c c.lexbuf
@@ -115,9 +112,10 @@ module Make (Loc : LOC)
         q_shift    = shift    ;
         q_contents = contents }
     in
-    let r = with_curr_loc_in Uquotation quotation c in
-    set_start_p c;
+    let sp = c.lexbuf.lex_start_p in
+    let r = parse_in Uquotation quotation c in
     let contents = buff_contents c in
+    c.lexbuf.lex_start_p <- sp;
     match r with
     | [] -> let s = contents in
             mkQUOTATION (mk (String.sub s 0 (String.length s - 2)))
@@ -189,6 +187,7 @@ module Make (Loc : LOC)
     if c.warnings then
       warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
 
+  let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
 
   }
 
@@ -284,7 +283,7 @@ module Make (Loc : LOC)
     | (int_literal as i) "n"                                    { mkNATIVEINT i }
     | '"' (string_char* as s) '"'                    { update_loc c; mkSTRING s }
     | unterminated_string as s                       {             update_loc c ;
-                                                       unterminated s [Ustring] }
+                                                      unterminated1 s Ustring c }
     | "'" (char_litteral as s) "'"                     { update_loc c; mkCHAR s }
     | "(*"                                   { store c; parse_comment comment c }
     | "(*)"                                  { warn_comment_start c lexbuf      ;
@@ -299,10 +298,10 @@ module Make (Loc : LOC)
         then mkQUOTATION { q_name = ""; q_loc = ""; q_shift = 2; q_contents = "" }
         else parse (symbolchar_star "<<>>") c                                   }
     | "<@"
-      { if quotations c then with_curr_loc maybe_quotation_at c
+      { if quotations c then parse_with_sp left_angle_at c
         else parse (symbolchar_star "<@") c                                     }
     | "<:"
-      { if quotations c then with_curr_loc maybe_quotation_colon c
+      { if quotations c then parse_with_sp left_angle_colon c
         else parse (symbolchar_star "<:") c                                     }
     | "#" ([' ' '\t']* as bl1) ('0'* as zeros) ('0' | ['1'-'9']['0'-'9']* as num)
           ([' ' '\t']* as bl2) ("\"" ([^ '\n' '\r' '"' ] * as name) "\"")?
@@ -333,7 +332,7 @@ module Make (Loc : LOC)
       | ":=" | ":>" | ";"  | ";;" | "_"
       | left_delimitor | right_delimitor ) as x                    { mkSYMBOL x }
     | '$' { if antiquots c
-            then with_curr_loc dollar (shift 1 c)
+            then parse (dollar (get_sp c)) c
             else parse (symbolchar_star "$") c }
     | ['~' '?' '!' '=' '<' '>' '|' '&' '@' '^' '+' '-' '*' '/' '%' '\\'] symbolchar *
                                                               as x { mkSYMBOL x }
@@ -345,17 +344,16 @@ module Make (Loc : LOC)
 
   and comment c = parse
       "(*"                               {                              store c ;
-                                            with_curr_loc_in Ucomment comment c &
+                                                    parse_in Ucomment comment c &
                                                                parse' comment c }
     | "*)"                                                        { store c; [] }
     | '<' (':' ident)? ('@' locname)? '<'
                 { store c;
-                  (if quotations c then
-                    with_curr_loc_in Uquotation quotation c else []) &
+                  (if quotations c then parse_in Uquotation quotation c else []) &
                   parse' comment c }
     | ident                                             { store_parse comment c }
     | string                              { update_loc c; store_parse comment c }
-    | unterminated_string           { update_loc c; store c; Ustring :: c.stack }
+    | unterminated_string           { update_loc c; store c; (c.lexbuf.lex_start_p, Ustring) :: c.stack }
     | "''"                                              { store_parse comment c }
     | char                                { update_loc c; store_parse comment c }
     | eof                                                             { c.stack }
@@ -366,12 +364,14 @@ module Make (Loc : LOC)
     | symbolchar* as tok            { move_start_p (-String.length beginning) c ;
                                                      mkSYMBOL (beginning ^ tok) }
 
-  and maybe_quotation_at c = parse
+  (* <@ *)
+  and left_angle_at c = parse
     | (ident as loc) '<'
       { mk_quotation quotation c "" loc (1 + String.length loc)                 }
     | symbolchar* as tok                                 { mkSYMBOL("<@" ^ tok) }
 
-  and maybe_quotation_colon c = parse
+  (* <: *)
+  and left_angle_colon c = parse
     | (ident as name) '<'
       { mk_quotation quotation c name "" (1 + String.length name)               }
     | (ident as name) '@' (locname as loc) '<'
@@ -381,28 +381,28 @@ module Make (Loc : LOC)
 
   and quotation c = parse
     | '<' (':' ident)? ('@' locname)? '<'           {                   store c ;
-                                        with_curr_loc_in Uquotation quotation c &
+                                                parse_in Uquotation quotation c &
                                                              parse' quotation c }
     | ">>"                                                        { store c; [] }
     | eof                                                             { c.stack }
     | newline                       { update_chars c 0; store_parse quotation c }
     | _                                               { store_parse quotation c }
 
-  and dollar c = parse
-    | '$'                                        { set_start_p c; mkANTIQUOT "" }
-    | ('`'? (identchar*|'.'+) as name) ':'
-      { with_curr_loc (antiquot name) (shift (1 + String.length name) c)        }
-    | _                                           { store_parse (antiquot "") c }
+  and dollar sp c = parse
+    | '$'                                                  { mkANTIQUOT c sp "" }
+    | ('`'? (identchar*|'.'+) as name) ':'         { parse (antiquot sp name) c }
+    | _                                        { store_parse (antiquot sp "") c }
 
-  and antiquot name c = parse
-    | '$'                   { set_start_p c; mkANTIQUOT ~name (buff_contents c) }
-    | eof       { unterminated (sf "$%s:%s" name (buff_contents c)) [Uantiquot] }
-    | newline                 { update_chars c 0; store_parse (antiquot name) c }
+  and antiquot sp name c = parse
+    | '$'                             { mkANTIQUOT c sp ~name (buff_contents c) }
+    | eof      {                                                    set_sp c sp ;
+                 unterminated1 (sf "$%s:%s" name (buff_contents c)) Uantiquot c }
+    | newline              { update_chars c 0; store_parse (antiquot sp name) c }
     | '<' (':' ident)? ('@' locname)? '<'
-      { store c; match with_curr_loc_in Uquotation quotation c with
-                 | [] -> parse (antiquot name) c
+      { store c; match parse_in Uquotation quotation c with
+                 | [] -> parse (antiquot sp name) c
                  | stack -> unterminated (buff_contents c) stack  }
-    | _                                         { store_parse (antiquot name) c }
+    | _                                      { store_parse (antiquot sp name) c }
 
   {
 
@@ -429,13 +429,12 @@ module Make (Loc : LOC)
     some state.
    *)
   let from_context c =
-    let tok = with_curr_loc token c in
+    let tok = parse token c in
     let loc = Loc.of_lexbuf c.lexbuf in
     if tok = eoi then None else Some (tok, loc)
 
   let from_lexbuf ~quotations ~antiquotations ~warnings lb =
     let c = { (default_context lb) with
-              loc        = Loc.of_lexbuf lb;
               antiquots  = antiquotations;
               quotations = quotations;
               warnings   = warnings

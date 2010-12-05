@@ -1,1 +1,1 @@
-ERROR "(*\"\n" "Unterminated" "Ustring" "Ucomment"
+ERROR "(*\"\n" "Unterminated" "input.ml" "1" "0" "2" "Ustring" "input.ml" "1" "0" "0" "Ucomment"

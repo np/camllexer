@@ -94,7 +94,7 @@ and newline = LF | CR | CRLF
 and error =
   | Illegal_character of char
   | Illegal_escape    of string
-  | Unterminated      of unterminated list
+  | Unterminated      of (Lexing.position * unterminated) list
   | Literal_overflow  of string
 
 and unterminated =
