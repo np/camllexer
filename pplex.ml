@@ -45,7 +45,7 @@ let rec unparse_tokens =
       end
   | [< '(EOI,loc) >] -> [< '(eoi,loc) >]
   | [< '(_,loc) >] -> Loc.raise loc PPLexParseError
-  | [<>] -> raise PPLexParseError
+  | [<>] -> [<>]
 
 let main () =
   let usage () = 
