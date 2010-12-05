@@ -12,7 +12,7 @@ let (Some (+)) = Some (42l, 42L, 42n, 4.2, '?', '\'', '\n',
 let f g x y = g ~x:x ?y:y
 (* QUOTATION *)
 <<foo>> <:bar<baz>> <<foo$bar$baz>> <:bar<foo$bar$baz>>
-<@loca<foo>> <:expr@loc<foo>> <<abc<:def<ghi>>klm>>
+<@loca<foo>> <:expr@loc<foo>> <<not<:a<nested>>quot>>
 (* ANTIQUOT *)
 $foo:bar$ $baz$ $`foo:bar$ $..:bar$
 caml $antiquo << quot $antiquo$ quot >> antiquo$ caml
