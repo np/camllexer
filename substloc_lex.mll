@@ -31,5 +31,5 @@ rule loc = parse
   | _ as c { CHR c }
 
 and line = parse
-  | [^ '\n']* '\n'? as ln { Some ln }
+  | [^ '\n' '\r']* ('\n'|'\r'|"\r\n")? as ln { Some ln }
   | eof { None }
