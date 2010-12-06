@@ -50,9 +50,11 @@ let rec unparse_tokens =
 
 let main () =
   let usage () = 
-    Printf.eprintf "Usage: pplex [-s|-r|-f|-Q|-A|-h] [-|<file.ml>]\n";
+    Printf.eprintf "Usage: pplex [<option>] [-|<file.ml>]\n";
+    Printf.eprintf "Options:\n";
     Printf.eprintf " -s Show the token in a easily parsable format\n";
-    Printf.eprintf " -p Show positions between tokens (implies -s)\n";
+    Printf.eprintf " -p Show positions\n";
+    Printf.eprintf " -l Show locations of tokens\n";
     Printf.eprintf " -r Reverse the preprocessor by reading the -s output format\n";
     Printf.eprintf " -f Enable fault tolerance\n";
     Printf.eprintf " -Q Enable the lexing of quotations\n";
@@ -65,15 +67,16 @@ let main () =
   let rm x xs = List.mem x xs, List.filter ((<>) x) xs in
   let argv = List.tl argv in
   let positions, argv = rm "-p" argv in
-  let show, argv = rm "-s" argv in
+  let locations, argv = rm "-l" argv in
+  let show_tokens, argv = rm "-s" argv in
   let reverse, argv = rm "-r" argv in
   let fault_tolerant, argv = rm "-f" argv in
   let quotations, argv = rm "-Q" argv in
   let antiquotations, argv = rm "-A" argv in
   let not_warnings, argv = rm "-w" argv in
-  let show = show || positions in
   let warnings = not not_warnings in
   let help, argv = rm "-h" argv in
+  let show = show_tokens || positions || locations in
   let () = if help then usage () in
   let filename =
     match argv with
@@ -99,13 +102,16 @@ let main () =
     | ERROR(_, err) -> Loc.raise loc (LexError err)
     | _ -> f loc x
   in
+  let seq f g x y = f x y; g x y in
   let print_pos p = Printf.printf "File \"%s\", line %d, character %d\n"
                                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) in
-  let show_token_nl x = print_string (show_token x); print_char '\n' in
-  let show_token_nl =
-    if positions then fun loc x -> print_pos (Loc.start_pos loc);
-                                   show_token_nl x
-    else fun _ -> show_token_nl
+  let show_token_nl _ x = print_string (show_token x); print_char '\n' in
+  let show_pos loc _ = print_pos (Loc.start_pos loc) in
+  let show_loc loc _ = Printf.printf "%s\n" (Loc.to_string loc) in
+  let show_tokloc =
+    seq (if positions then show_pos else fun _ _ -> ())
+        (seq (if locations then show_loc else fun _ _ -> ())
+             (if show_tokens then show_token_nl else fun _ _ -> ()))
   in
   let print_token _ x = print_string (string_of_token x) in
   let rec string_of_exn = function
@@ -121,7 +127,7 @@ let main () =
   in
   try
     iter_tokens ((if fault_tolerant then dont_raise_errors else raise_errors)
-                 (if show then show_token_nl else print_token))
+                 (if show then show_tokloc else print_token))
                 (if reverse then unparse_tokens strm else strm)
   with exn ->
     (Printf.eprintf "Error: %s\n%!" (string_of_exn exn); exit 1)
