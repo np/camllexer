@@ -1,0 +1,22 @@
+#!/bin/bash -e
+prefix=''
+count='100'
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p|--prefix) shift; prefix="$1"; shift;;
+    -c|--count) shift; count="$1"; shift;;
+    -*) echo usage; exit 1;;
+    *) break;;
+  esac
+done
+input="$(mktemp --suffix .ml)"
+echo -n "$prefix" > "$input"
+dd if=/dev/urandom of="$input" oflag=append count=1 bs="$count" 2>/dev/null
+lex=${PPLEX:-$(dirname $0)/../pplex.byte}
+subst=$(dirname $0)/../substloc.byte
+if "$lex" -f -l -d "$input" | "$subst" | cmp "$input" /dev/stdin; then
+  rm "$input"
+else
+  echo "Failed on $input"
+  exit 1
+fi

@@ -1,0 +1,15 @@
+#!/bin/bash -e
+opts=( )
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) shift; break;;
+    -*) opts=("${opts[@]}" "$1"); shift;;
+    *)  break;;
+  esac
+done
+lex=${PPLEX:-$(dirname $0)/../pplex.byte}
+subst=$(dirname $0)/../substloc.byte
+for i; do
+  echo "$i"
+  "$lex" -l -d "${opts[@]}" "$i" | "$subst" | cmp "$i" /dev/stdin
+done
