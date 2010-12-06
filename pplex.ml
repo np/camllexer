@@ -59,6 +59,7 @@ let main () =
     Printf.eprintf " -f Enable fault tolerance\n";
     Printf.eprintf " -Q Enable the lexing of quotations\n";
     Printf.eprintf " -A Enable the lexing of anti-quotations\n";
+    Printf.eprintf " -d Disable the effect of # line directives\n";
     Printf.eprintf " -w Disable warnings\n";
     Printf.eprintf " -h Display this help and exit\n";
     exit 1
@@ -73,6 +74,8 @@ let main () =
   let fault_tolerant, argv = rm "-f" argv in
   let quotations, argv = rm "-Q" argv in
   let antiquotations, argv = rm "-A" argv in
+  let no_line_directives, argv = rm "-d" argv in
+  let line_directives = not no_line_directives in
   let not_warnings, argv = rm "-w" argv in
   let warnings = not not_warnings in
   let help, argv = rm "-h" argv in
@@ -88,7 +91,8 @@ let main () =
   let ic = if filename = "-" then stdin else open_in filename in
   let flags = { Camllexer.quotations = quotations
               ; antiquotations = antiquotations
-              ; warnings = warnings } in
+              ; warnings = warnings
+              ; line_directives = line_directives } in
   let next = Lex.from_channel flags loc ic in
   let strm = Stream.from (fun _ -> next ()) in
   let loc_of_unterminated loc = function

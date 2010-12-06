@@ -43,11 +43,13 @@ let sf = Printf.sprintf
 type flags = { quotations      : bool  (** Enables the lexing of quotations *)
              ; antiquotations  : bool  (** Enables the lexing of anti-quotations *)
              ; warnings        : bool  (** Enables the production of warnings *)
+             ; line_directives : bool  (** Honor the # line directives *)
              }
 
 let default_flags = { quotations = false
                     ; antiquotations = false
                     ; warnings = true
+                    ; line_directives = true
                     }
 
 module Make (Loc : LOC)
@@ -80,6 +82,7 @@ module Make (Loc : LOC)
 
   let quotations c = c.flags.quotations
   let antiquots c = c.flags.antiquotations
+  let line_directives c = c.flags.line_directives
   let set_sp c sp = c.lexbuf.lex_start_p <- sp
   let get_sp c = c.lexbuf.lex_start_p
   let move_start_p shift c =
@@ -308,7 +311,10 @@ module Make (Loc : LOC)
           ([^ '\n' '\r']* as com) (newline as nl)
                                 { let inum = int_of_string num in
                                   let nl = newline_of_string nl in
-                                  update_absolute_position c name inum;
+                                  if line_directives c then
+                                    update_absolute_position c name inum
+                                  else
+                                    update_chars c 0;
                                   mkLINE_DIRECTIVE{l_blanks1=bl1;
                                                    l_zeros=String.length zeros;
                                                    l_linenum=inum;
