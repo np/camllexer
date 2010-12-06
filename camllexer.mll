@@ -40,6 +40,16 @@ end
 
 let sf = Printf.sprintf
 
+type flags = { quotations      : bool  (** Enables the lexing of quotations *)
+             ; antiquotations  : bool  (** Enables the lexing of anti-quotations *)
+             ; warnings        : bool  (** Enables the production of warnings *)
+             }
+
+let default_flags = { quotations = false
+                    ; antiquotations = false
+                    ; warnings = true
+                    }
+
 module Make (Loc : LOC)
 = struct
 
@@ -47,29 +57,19 @@ module Make (Loc : LOC)
 
   type token = (caml_token * Loc.t)
 
-  (* To store some context information:
-  *   stack     : what is our call stack?
-  *   quotations: shall we lex quotation?
-  *               If quotations is false it's a SYMBOL token.
-  *   antiquots : shall we lex antiquotations.
-  *)
-
   type context =
-  { stack      : (position * unterminated) list
-  ; quotations : bool
-  ; antiquots  : bool
-  ; warnings   : bool
+  { stack      : (position * unterminated) list (** Stack of opened constructs *)
+  ; flags      : flags (** Lexing flavors *)
   ; lexbuf     : lexbuf
   ; buffer     : Buffer.t
   }
 
   let default_context lb =
-  { stack      = []        ;
-    quotations = true      ;
-    antiquots  = false     ;
-    warnings   = true      ;
-    lexbuf     = lb        ;
-    buffer     = Buffer.create 256 }
+  { stack      = []
+  ; flags      = default_flags
+  ; lexbuf     = lb
+  ; buffer     = Buffer.create 256
+  }
 
   (* To buffer string literals, quotations and antiquotations *)
 
@@ -78,8 +78,8 @@ module Make (Loc : LOC)
     let contents = Buffer.contents c.buffer in
     Buffer.reset c.buffer; contents
 
-  let quotations c = c.quotations
-  let antiquots c = c.antiquots
+  let quotations c = c.flags.quotations
+  let antiquots c = c.flags.antiquotations
   let set_sp c sp = c.lexbuf.lex_start_p <- sp
   let get_sp c = c.lexbuf.lex_start_p
   let move_start_p shift c =
@@ -180,11 +180,11 @@ module Make (Loc : LOC)
     Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) msg
 
   let warn_comment_not_end c lexbuf op =
-    if c.warnings && op <> "" && op.[String.length op - 1] = '*' then
+    if c.flags.warnings && op <> "" && op.[String.length op - 1] = '*' then
       warn "this is not the end of a comment" (Loc.of_lexbuf lexbuf)
 
   let warn_comment_start c lexbuf =
-    if c.warnings then
+    if c.flags.warnings then
       warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
 
   let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
@@ -433,32 +433,28 @@ module Make (Loc : LOC)
     let loc = Loc.of_lexbuf c.lexbuf in
     if tok = eoi then None else Some (tok, loc)
 
-  let from_lexbuf ~quotations ~antiquotations ~warnings lb =
-    let c = { (default_context lb) with
-              antiquots  = antiquotations;
-              quotations = quotations;
-              warnings   = warnings
-            }
-    in fun () -> from_context c
+  let from_lexbuf flags lb =
+    let c = { (default_context lb) with flags = flags } in
+    fun () -> from_context c
 
   let setup_loc lb loc =
     let start_pos = Loc.start_pos loc in
     lb.lex_abs_pos <- start_pos.pos_cnum;
     lb.lex_curr_p  <- start_pos
 
-  let from_string ~quotations ~antiquotations ~warnings loc str =
+  let from_string flags loc str =
     let lb = Lexing.from_string str in
     setup_loc lb loc;
-    from_lexbuf ~quotations ~antiquotations ~warnings lb
+    from_lexbuf flags lb
 
-  let from_channel ~quotations ~antiquotations ~warnings loc ic =
+  let from_channel flags loc ic =
     let lb = Lexing.from_channel ic in
     setup_loc lb loc;
-    from_lexbuf ~quotations ~antiquotations ~warnings lb
+    from_lexbuf flags lb
 
-  let from_stream ~quotations ~antiquotations ~warnings loc strm =
+  let from_stream flags loc strm =
     let lb = Lexing.from_function (lexing_store strm) in
     setup_loc lb loc;
-    from_lexbuf ~quotations ~antiquotations ~warnings lb
+    from_lexbuf flags lb
 end
 }

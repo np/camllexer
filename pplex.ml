@@ -83,7 +83,10 @@ let main () =
   in
   let loc = Loc.mk filename in
   let ic = if filename = "-" then stdin else open_in filename in
-  let next = Lex.from_channel ~quotations ~antiquotations ~warnings loc ic in
+  let flags = { Camllexer.quotations = quotations
+              ; antiquotations = antiquotations
+              ; warnings = warnings } in
+  let next = Lex.from_channel flags loc ic in
   let strm = Stream.from (fun _ -> next ()) in
   let loc_of_unterminated loc = function
     | (pos, _) :: _ -> Loc.of_postions pos (Loc.stop_pos loc)

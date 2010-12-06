@@ -31,32 +31,25 @@ end
 
 type 'a iterator = unit -> 'a option
 
+type flags = { quotations      : bool  (** Enables the lexing of quotations *)
+             ; antiquotations  : bool  (** Enables the lexing of anti-quotations *)
+             ; warnings        : bool  (** Enables the production of warnings *)
+             }
+
+val default_flags : flags
+(** By default, quotations and anti-quotations are NOT recognized,
+    warnings are produced. *)
+
 module Make : functor (Loc : LOC) -> sig
   type token = Camltoken.caml_token * Loc.t
 
   val setup_loc : Lexing.lexbuf -> Loc.t -> unit
 
-  val from_lexbuf :
-    quotations:bool ->
-    antiquotations:bool ->
-    warnings:bool ->
-    Lexing.lexbuf -> token iterator
+  val from_lexbuf : flags -> Lexing.lexbuf -> token iterator
 
-  val from_string :
-    quotations:bool ->
-    antiquotations:bool ->
-    warnings:bool ->
-    Loc.t -> string -> token iterator
+  val from_string : flags -> Loc.t -> string -> token iterator
 
-  val from_channel :
-    quotations:bool ->
-    antiquotations:bool ->
-    warnings:bool ->
-    Loc.t -> in_channel -> token iterator
+  val from_channel : flags -> Loc.t -> in_channel -> token iterator
 
-  val from_stream :
-    quotations:bool ->
-    antiquotations:bool ->
-    warnings:bool ->
-    Loc.t -> char Stream.t -> token iterator
+  val from_stream : flags -> Loc.t -> char Stream.t -> token iterator
 end
