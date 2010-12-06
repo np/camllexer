@@ -5,4 +5,5 @@ test:
 	./tests/check-roundtrip -f -w $$INPUTS && \
 	./tests/check-roundtrip -A -Q -f -w $$INPUTS && \
 	./tests/check-locs -f -w $$INPUTS && \
+	./tests/check-locs -A -Q -f -w $$INPUTS && \
 	PPLEX=$(PWD)/_build/pplex.byte cmdcheck tests/*.t
