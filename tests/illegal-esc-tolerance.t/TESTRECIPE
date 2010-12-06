@@ -2,12 +2,12 @@
 
 testname='illegal-esc-tolerance.t'
 command="$PPLEX"
-args=( '-f' '-s' '-' )
+args=( '-f' '-s' 'input.ml' )
 exit_code='0'
-stdin_file='stdin'
+stdin_file='/dev/null'
 stdout_file='stdout'
 stderr_file='/dev/null'
-sources=( )
+sources=( input.ml )
 products=( )
 
 # Environment variables:

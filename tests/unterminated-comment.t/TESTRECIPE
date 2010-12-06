@@ -2,9 +2,9 @@
 
 testname='unterminated-comment.t'
 command="$PPLEX"
-args=( '-s' '-' )
+args=( '-s' )
 exit_code='1'
-stdin_file='stdin'
+stdin_file='input.ml'
 stdout_file='stdout'
 stderr_file='stderr'
 sources=( )
