@@ -73,60 +73,26 @@ module Make (Loc : LOC)
   ; buffer     = Buffer.create 256
   }
 
-  (* To buffer string literals, quotations and antiquotations *)
+  (* To buffer comments, quotations and antiquotations *)
 
   let store c = Buffer.add_string c.buffer (Lexing.lexeme c.lexbuf)
   let buff_contents c =
     let contents = Buffer.contents c.buffer in
     Buffer.reset c.buffer; contents
 
+  (* Some projections *)
+
   let quotations c = c.flags.quotations
   let antiquots c = c.flags.antiquotations
   let line_directives c = c.flags.line_directives
+
+  (* Various location/postion related functions *)
+
   let set_sp c sp = c.lexbuf.lex_start_p <- sp
   let get_sp c = c.lexbuf.lex_start_p
-  let move_start_p shift c =
+  let move_sp shift c =
     let p = c.lexbuf.lex_start_p in
     c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
-
-  let unterminated s u = mkERROR s (Unterminated u)
-  let unterminated1 s u c = unterminated s [(get_sp c, u)]
-
-  let parse_with_sp f c =
-    let sp = get_sp c in
-    let r = f c c.lexbuf in
-    set_sp c sp; r
-  let parse_in frame f c = f { c with stack = (c.lexbuf.lex_start_p, frame) :: c.stack } c.lexbuf
-  let parse_comment comment c =
-    let sp = c.lexbuf.lex_start_p in
-    let r = parse_in Ucomment comment c in
-    let contents = buff_contents c in
-    c.lexbuf.lex_start_p <- sp;
-    match r with
-    | [] -> mkCOMMENT contents
-    | us -> unterminated contents us
-  let store_parse f c = store c ; f c c.lexbuf
-  let parse f c = f c c.lexbuf
-  let parse' f c () = f c c.lexbuf
-  let mk_quotation quotation c name loc shift =
-    let mk contents =
-      { q_name     = name     ;
-        q_loc      = loc      ;
-        q_shift    = shift    ;
-        q_contents = contents }
-    in
-    let sp = c.lexbuf.lex_start_p in
-    let r = parse_in Uquotation quotation c in
-    let contents = buff_contents c in
-    c.lexbuf.lex_start_p <- sp;
-    match r with
-    | [] -> let s = contents in
-            mkQUOTATION (mk (String.sub s 0 (String.length s - 2)))
-    | us -> unterminated (string_of_quotation (mk contents)) us
-
-  let (&) x f = match x with
-   | [] -> f ()
-   | us -> us
 
   (* Update the current location with file name and line number. *)
 
@@ -177,6 +143,22 @@ module Make (Loc : LOC)
     let chars = len - 1 - last_newline_offset in
     if newlines <> 0 then update_relative_position c newlines chars
 
+  let parse_with_sp f c =
+    let sp = get_sp c in
+    let r = f c c.lexbuf in
+    set_sp c sp; r
+  let parse_in frame f c = f { c with stack = (c.lexbuf.lex_start_p, frame) :: c.stack } c.lexbuf
+  let store_parse f c = store c ; f c c.lexbuf
+  let parse f c = f c c.lexbuf
+  let parse' f c () = f c c.lexbuf
+
+  let (&) x f = match x with
+   | [] -> f ()
+   | us -> us
+
+  let unterminated s u = mkERROR s (Unterminated u)
+  let unterminated1 s u c = unterminated s [(get_sp c, u)]
+
   let illegal_character c = mkERROR (String.make 1 c) (Illegal_character c)
 
   let warn msg loc =
@@ -191,6 +173,31 @@ module Make (Loc : LOC)
       warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
 
   let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
+
+  let parse_comment comment c =
+    let sp = c.lexbuf.lex_start_p in
+    let r = parse_in Ucomment comment c in
+    let contents = buff_contents c in
+    c.lexbuf.lex_start_p <- sp;
+    match r with
+    | [] -> mkCOMMENT contents
+    | us -> unterminated contents us
+
+  let parse_quotation quotation c name loc shift =
+    let mk contents =
+      { q_name     = name     ;
+        q_loc      = loc      ;
+        q_shift    = shift    ;
+        q_contents = contents }
+    in
+    let sp = c.lexbuf.lex_start_p in
+    let r = parse_in Uquotation quotation c in
+    let contents = buff_contents c in
+    c.lexbuf.lex_start_p <- sp;
+    match r with
+    | [] -> let s = contents in
+            mkQUOTATION (mk (String.sub s 0 (String.length s - 2)))
+    | us -> unterminated (string_of_quotation (mk contents)) us
 
   }
 
@@ -293,8 +300,8 @@ module Make (Loc : LOC)
                                                store c; parse_comment comment c }
     | "<<" (quotchar* as beginning)
       { if quotations c
-        then (move_start_p (-String.length beginning) c;
-              mk_quotation quotation c "" "" 2)
+        then (move_sp (-String.length beginning) c;
+              parse_quotation quotation c "" "" 2)
         else parse (symbolchar_star ("<<" ^ beginning)) c                       }
     | "<<>>"
       { if quotations c
@@ -367,21 +374,21 @@ module Make (Loc : LOC)
     | _                                                 { store_parse comment c }
 
   and symbolchar_star beginning c = parse
-    | symbolchar* as tok            { move_start_p (-String.length beginning) c ;
+    | symbolchar* as tok                 { move_sp (-String.length beginning) c ;
                                                      mkSYMBOL (beginning ^ tok) }
 
   (* <@ *)
   and left_angle_at c = parse
     | (ident as loc) '<'
-      { mk_quotation quotation c "" loc (1 + String.length loc)                 }
+      { parse_quotation quotation c "" loc (1 + String.length loc)                 }
     | symbolchar* as tok                                 { mkSYMBOL("<@" ^ tok) }
 
   (* <: *)
   and left_angle_colon c = parse
     | (ident as name) '<'
-      { mk_quotation quotation c name "" (1 + String.length name)               }
+      { parse_quotation quotation c name "" (1 + String.length name)               }
     | (ident as name) '@' (locname as loc) '<'
-      { mk_quotation quotation c name loc
+      { parse_quotation quotation c name loc
                      (2 + String.length loc + String.length name)               }
     | symbolchar* as tok                                 { mkSYMBOL("<:" ^ tok) }
 
