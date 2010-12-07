@@ -1,4 +1,5 @@
 _build
 pplex.byte
+substloc.byte
 local
 *.swp
