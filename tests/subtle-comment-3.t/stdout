@@ -1,4 +1,5 @@
 LIDENT "a"
+WARNING "Comment_start"
 COMMENT "(*)b(*c*)d*)"
 LIDENT "e"
 NEWLINE "\n"
