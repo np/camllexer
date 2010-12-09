@@ -57,6 +57,9 @@ type caml_token = (*should we use private here?*)
                       (** Caml new lines: `\n', `\r', or `\r\n'. *)
   | LINE_DIRECTIVE of line_directive
                       (** Caml line directives `# 42', `# 2 "f.ml"' *)
+  | WARNING       of warning
+                      (** This token warn about some other tokens of the input
+                          but does not consume any input. *)
   | ERROR of string * error
                       (** The erroneous part of the input and an error value
                           explaining the issue. *)
@@ -90,6 +93,10 @@ and blanks = string
 and comment = string
 
 and newline = LF | CR | CRLF
+
+and warning =
+  | Comment_start
+  | Comment_not_end
 
 and error =
   | Illegal_character of char
@@ -127,6 +134,7 @@ val mkLINE_DIRECTIVE : line_directive -> caml_token
 val mkLINE_DIRECTIVE : ?bl1:blanks -> ?bl2:blanks -> ?zeros:int -> ?s:string ->
                        ?com:string ?nl:string -> int -> caml_token
 *)
+val mkWARNING : warning -> caml_token
 val mkERROR : string -> error -> caml_token
 val eoi : caml_token
 
@@ -182,6 +190,8 @@ val show_token : caml_token -> string
 val string_of_error : error -> string
 
 val newline_of_string : string -> newline
+
+val message_of_warning : warning -> string
 
 module Eval : sig
   val char : string -> char

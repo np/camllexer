@@ -33,13 +33,12 @@ type 'a iterator = unit -> 'a option
 
 type flags = { quotations      : bool  (** Enables the lexing of quotations *)
              ; antiquotations  : bool  (** Enables the lexing of anti-quotations *)
-             ; warnings        : bool  (** Enables the production of warnings *)
              ; line_directives : bool  (** Honor the # line directives *)
              }
 
 val default_flags : flags
 (** By default, quotations and anti-quotations are NOT recognized,
-    warnings are produced and line_directives are honored. *)
+    and line_directives are honored. *)
 
 module Make : functor (Loc : LOC) -> sig
   type token = Camltoken.caml_token * Loc.t

@@ -46,20 +46,21 @@ type caml_token =
   | BLANKS        of blanks
   | NEWLINE       of newline
   | LINE_DIRECTIVE of line_directive
+  | WARNING       of warning
   | ERROR         of string * error
   | EOI
 
 and newline = LF | CR | CRLF
+
+and warning =
+  | Comment_start
+  | Comment_not_end
 
 and error =
   | Illegal_character of char
   | Illegal_escape    of string
   | Unterminated      of (Lexing.position * unterminated) list
   | Literal_overflow  of string
-(*
-  | Comment_start
-  | Comment_not_end
-*)
 
 and unterminated =
   | Ucomment
@@ -135,6 +136,10 @@ let for_all p s =
   let rec loop i = i >= len || p s.[i] && loop (i+1)
   in loop 0
 
+let (<$>) f = function
+  | Some x -> Some (f x)
+  | None -> None
+
 let blank c = List.mem c [' '; '\t'; '\012']
 let newline c = List.mem c ['\r'; '\n']
 
@@ -146,6 +151,14 @@ let string_of_newline = function
   | LF   -> "\n"
   | CR   -> "\r"
   | CRLF -> "\r\n"
+
+let strings_of_warning = function
+  | Comment_start -> ["Comment_start"]
+  | Comment_not_end -> ["Comment_not_end"]
+
+let message_of_warning = function
+  | Comment_start   -> "this is the start of a comment"
+  | Comment_not_end -> "this is not the end of a comment"
 
 let string_of_psymbol pre_blanks op post_blanks =
   assert (op <> "");
@@ -197,6 +210,7 @@ let string_of_token = function
   | QUOTATION     q -> string_of_quotation q
   | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
+  | WARNING _       -> ""
   | ERROR (tok, _)  -> tok
   | LINE_DIRECTIVE ld -> string_of_line_directive ld
 
@@ -221,6 +235,7 @@ let strings_of_token = function
   | BLANKS s         -> ("BLANKS", [s])
   | NEWLINE nl       -> ("NEWLINE", [string_of_newline nl])
   | EOI              -> ("EOI", [])
+  | WARNING w        -> ("WARNING", strings_of_warning w)
   | ERROR (tok, err) -> ("ERROR", tok :: let (x,xs) = show_error err in x :: xs)
   | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
   | LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=i;l_blanks2=bl2;
@@ -335,6 +350,7 @@ let cvt_int64_literal s =
 let cvt_nativeint_literal s =
   Nativeint.neg (Nativeint.of_string ("-" ^ String.sub s 0 (String.length s - 1)))
 
+let mkWARNING w = WARNING w
 let mkERROR s e = ERROR (s, e)
 
 let mkCHAR s = try CHAR(Eval.char s, s)
@@ -462,6 +478,11 @@ let parse_position_unterminated =
 let parse_position_unterminated_list =
   parse_list parse_position_unterminated
 
+let warning_of_strings = function
+  | ["Comment_start"] -> Some Comment_start
+  | ["Comment_not_end"] -> Some Comment_not_end
+  | _ -> None
+
 let token_of_strings = function
   | "KEYWORD", [s]           -> Some (KEYWORD s)
   | "SYMBOL", [s]            -> Some (SYMBOL s)
@@ -487,6 +508,7 @@ let token_of_strings = function
   | "NEWLINE", ["\r"]        -> Some (NEWLINE CR)
   | "NEWLINE", ["\r\n"]      -> Some (NEWLINE CRLF)
   | "EOI", []                -> Some EOI
+  | "WARNING", xs            -> mkWARNING <$> warning_of_strings xs
   | "ERROR", (tok :: x :: xs) ->
       (* Don't you see this code crying for the option monad? *)
       let mk err = Some (ERROR (tok, err)) in

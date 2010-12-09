@@ -26,6 +26,22 @@ open Camltoken
 
 type 'a iterator = unit -> 'a option
 
+type 'a iterator_list = unit -> 'a list
+
+let flatten_iterator_list next0 =
+  let queue = ref [] in
+  let rec next () =
+    match !queue with
+    | x :: xs -> queue := xs; Some x
+    | [] ->
+        match next0 () with
+        | []      -> None
+        | [x]     -> Some x
+        | x :: xs ->
+            queue := xs;
+            Some x
+  in next
+
 (* See loc.mli for actual documentation *)
 module type LOC = sig
   type t
@@ -42,13 +58,11 @@ let sf = Printf.sprintf
 
 type flags = { quotations      : bool  (** Enables the lexing of quotations *)
              ; antiquotations  : bool  (** Enables the lexing of anti-quotations *)
-             ; warnings        : bool  (** Enables the production of warnings *)
              ; line_directives : bool  (** Honor the # line directives *)
              }
 
 let default_flags = { quotations = false
                     ; antiquotations = false
-                    ; warnings = true
                     ; line_directives = true
                     }
 
@@ -161,16 +175,10 @@ module Make (Loc : LOC)
 
   let illegal_character c = mkERROR (String.make 1 c) (Illegal_character c)
 
-  let warn msg loc =
-    Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) msg
-
-  let warn_comment_not_end c lexbuf op =
-    if c.flags.warnings && op <> "" && op.[String.length op - 1] = '*' then
-      warn "this is not the end of a comment" (Loc.of_lexbuf lexbuf)
-
-  let warn_comment_start c lexbuf =
-    if c.flags.warnings then
-      warn "this is the start of a comment" (Loc.of_lexbuf lexbuf)
+  let warn_comment_not_end op tail =
+    if op <> "" && op.[String.length op - 1] = '*' then
+      mkWARNING Comment_not_end :: tail
+    else tail
 
   let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
 
@@ -278,34 +286,33 @@ module Make (Loc : LOC)
 
 
   rule token c = parse
-    | '\n'                                     { update_chars c 0; mkNEWLINE LF }
-    | '\r'                                     { update_chars c 0; mkNEWLINE CR }
-    | "\r\n"                                 { update_chars c 0; mkNEWLINE CRLF }
-    | blank + as x                                                 { mkBLANKS x }
-    | "~" (lowercase identchar * as x) ':'                          { mkLABEL x }
-    | "?" (lowercase identchar * as x) ':'                       { mkOPTLABEL x }
-    | lowercase identchar * as x                                   { mkLIDENT x }
-    | uppercase identchar * as x                                   { mkUIDENT x }
-    | int_literal as i                                                { mkINT i }
-    | float_literal as f                                            { mkFLOAT f }
-    | (int_literal as i) "l"                                        { mkINT32 i }
-    | (int_literal as i) "L"                                        { mkINT64 i }
-    | (int_literal as i) "n"                                    { mkNATIVEINT i }
-    | '"' (string_char* as s) '"'                    { update_loc c; mkSTRING s }
-    | unterminated_string as s                       {             update_loc c ;
-                                                      unterminated1 s Ustring c }
-    | "'" (char_litteral as s) "'"                     { update_loc c; mkCHAR s }
-    | "(*"                                   { store c; parse_comment comment c }
-    | "(*)"                                  { warn_comment_start c lexbuf      ;
-                                               store c; parse_comment comment c }
+    | '\n'                                   { update_chars c 0; [mkNEWLINE LF] }
+    | '\r'                                   { update_chars c 0; [mkNEWLINE CR] }
+    | "\r\n"                               { update_chars c 0; [mkNEWLINE CRLF] }
+    | blank + as x                                               { [mkBLANKS x] }
+    | "~" (lowercase identchar * as x) ':'                        { [mkLABEL x] }
+    | "?" (lowercase identchar * as x) ':'                     { [mkOPTLABEL x] }
+    | lowercase identchar * as x                                 { [mkLIDENT x] }
+    | uppercase identchar * as x                                 { [mkUIDENT x] }
+    | int_literal as i                                              { [mkINT i] }
+    | float_literal as f                                          { [mkFLOAT f] }
+    | (int_literal as i) "l"                                      { [mkINT32 i] }
+    | (int_literal as i) "L"                                      { [mkINT64 i] }
+    | (int_literal as i) "n"                                  { [mkNATIVEINT i] }
+    | '"' (string_char* as s) '"'                  { update_loc c; [mkSTRING s] }
+    | unterminated_string as s                     {               update_loc c ;
+                                                    [unterminated1 s Ustring c] }
+    | "'" (char_litteral as s) "'"                   { update_loc c; [mkCHAR s] }
+    | "(*"                                 { store c; [parse_comment comment c] }
+    | "(*)"       { store c; [mkWARNING Comment_start; parse_comment comment c] }
     | "<<" (quotchar* as beginning)
       { if quotations c
         then (move_sp (-String.length beginning) c;
-              parse_quotation quotation c "" "" 2)
+              [parse_quotation quotation c "" "" 2])
         else parse (symbolchar_star ("<<" ^ beginning)) c                       }
     | "<<>>"
       { if quotations c
-        then mkQUOTATION { q_name = ""; q_loc = ""; q_shift = 2; q_contents = "" }
+        then [mkQUOTATION { q_name = ""; q_loc = ""; q_shift = 2; q_contents = "" }]
         else parse (symbolchar_star "<<>>") c                                   }
     | "<@"
       { if quotations c then parse_with_sp left_angle_at c
@@ -322,38 +329,36 @@ module Make (Loc : LOC)
                                     update_absolute_position c name inum
                                   else
                                     update_chars c 0;
-                                  mkLINE_DIRECTIVE{l_blanks1=bl1;
+                                  [mkLINE_DIRECTIVE{l_blanks1=bl1;
                                                    l_zeros=String.length zeros;
                                                    l_linenum=inum;
                                                    l_blanks2=bl2;
                                                    l_filename=name;
                                                    l_comment=com;
-                                                   l_newline=nl} }
+                                                   l_newline=nl}] }
     | '(' (not_star_symbolchar as op) ')'
-                                                 { mkPSYMBOL (String.make 1 op) }
+                                               { [mkPSYMBOL (String.make 1 op)] }
     | '(' (not_star_symbolchar symbolchar* as op) ')'
-                                             { warn_comment_not_end c lexbuf op ;
-                                                                   mkPSYMBOL op }
+                                       { warn_comment_not_end op [mkPSYMBOL op] }
     | '(' (not_star_symbolchar symbolchar* as op) (blank+ as post_blanks) ')'
-                                                    { mkPSYMBOL ~post_blanks op }
+                                                  { [mkPSYMBOL ~post_blanks op] }
     | '(' (blank+ as pre_blanks) (symbolchar+ as op) ')'
-                                             { warn_comment_not_end c lexbuf op ;
-                                                       mkPSYMBOL ~pre_blanks op }
+                           { warn_comment_not_end op [mkPSYMBOL ~pre_blanks op] }
     | '(' (blank+ as pre_blanks) (symbolchar+ as op) (blank+ as post_blanks) ')'
-                                        { mkPSYMBOL ~pre_blanks ~post_blanks op }
+                                      { [mkPSYMBOL ~pre_blanks ~post_blanks op] }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"
       | ":=" | ":>" | ";"  | ";;" | "_"
-      | left_delimitor | right_delimitor ) as x                    { mkSYMBOL x }
+      | left_delimitor | right_delimitor ) as x                  { [mkSYMBOL x] }
     | '$' { if antiquots c
             then parse (dollar (get_sp c)) c
             else parse (symbolchar_star "$") c }
     | ['~' '?' '!' '=' '<' '>' '|' '&' '@' '^' '+' '-' '*' '/' '%' '\\'] symbolchar *
-                                                              as x { mkSYMBOL x }
+                                                            as x { [mkSYMBOL x] }
     | eof
-      { let pos = lexbuf.lex_curr_p in
-        lexbuf.lex_curr_p <- { pos with pos_bol  = pos.pos_bol  + 1 ;
-                                        pos_cnum = pos.pos_cnum + 1 }; eoi      }
-    | _ as c                                              { illegal_character c }
+            { let pos = lexbuf.lex_curr_p in
+              lexbuf.lex_curr_p <- { pos with pos_bol  = pos.pos_bol  + 1 ;
+                                              pos_cnum = pos.pos_cnum + 1 }; [] }
+    | _ as c                                            { [illegal_character c] }
 
   and comment c = parse
       "(*"                               {                              store c ;
@@ -375,22 +380,22 @@ module Make (Loc : LOC)
 
   and symbolchar_star beginning c = parse
     | symbolchar* as tok                 { move_sp (-String.length beginning) c ;
-                                                     mkSYMBOL (beginning ^ tok) }
+                                                   [mkSYMBOL (beginning ^ tok)] }
 
   (* <@ *)
   and left_angle_at c = parse
     | (ident as loc) '<'
-      { parse_quotation quotation c "" loc (1 + String.length loc)                 }
-    | symbolchar* as tok                                 { mkSYMBOL("<@" ^ tok) }
+                 { [parse_quotation quotation c "" loc (1 + String.length loc)] }
+    | symbolchar* as tok                               { [mkSYMBOL("<@" ^ tok)] }
 
   (* <: *)
   and left_angle_colon c = parse
     | (ident as name) '<'
-      { parse_quotation quotation c name "" (1 + String.length name)               }
+               { [parse_quotation quotation c name "" (1 + String.length name)] }
     | (ident as name) '@' (locname as loc) '<'
-      { parse_quotation quotation c name loc
-                     (2 + String.length loc + String.length name)               }
-    | symbolchar* as tok                                 { mkSYMBOL("<:" ^ tok) }
+                            { [parse_quotation quotation c name loc
+                                  (2 + String.length loc + String.length name)] }
+    | symbolchar* as tok                               { [mkSYMBOL("<:" ^ tok)] }
 
   and quotation c = parse
     | '<' (':' ident)? ('@' locname)? '<'           {                   store c ;
@@ -402,19 +407,19 @@ module Make (Loc : LOC)
     | _                                               { store_parse quotation c }
 
   and dollar sp c = parse
-    | '$'                                                  { mkANTIQUOT c sp "" }
+    | '$'                                                { [mkANTIQUOT c sp ""] }
     | ('`'? (identchar*|'.'+) as name) ':'         { parse (antiquot sp name) c }
     | _                                        { store_parse (antiquot sp "") c }
 
   and antiquot sp name c = parse
-    | '$'                             { mkANTIQUOT c sp ~name (buff_contents c) }
-    | eof      {                                                    set_sp c sp ;
-                 unterminated1 (sf "$%s:%s" name (buff_contents c)) Uantiquot c }
+    | '$'                           { [mkANTIQUOT c sp ~name (buff_contents c)] }
+    | eof    {                                                      set_sp c sp ;
+               [unterminated1 (sf "$%s:%s" name (buff_contents c)) Uantiquot c] }
     | newline              { update_chars c 0; store_parse (antiquot sp name) c }
     | '<' (':' ident)? ('@' locname)? '<'
       { store c; match parse_in Uquotation quotation c with
                  | [] -> parse (antiquot sp name) c
-                 | stack -> unterminated (buff_contents c) stack  }
+                 | stack -> [unterminated (buff_contents c) stack] }
     | _                                      { store_parse (antiquot sp name) c }
 
   {
@@ -440,15 +445,18 @@ module Make (Loc : LOC)
 
     Previously it was 1/, and know it is 3/. Implenting 2/ would require
     some state.
+
+    In this situation EOI could just be removed.
    *)
   let from_context c =
-    let tok = parse token c in
-    let loc = Loc.of_lexbuf c.lexbuf in
-    if tok = eoi then None else Some (tok, loc)
+    let next_list () =
+      let toks = parse token c in
+      let loc = Loc.of_lexbuf c.lexbuf in
+      List.map (fun tok -> (tok, loc)) toks
+    in flatten_iterator_list next_list
 
   let from_lexbuf flags lb =
-    let c = { (default_context lb) with flags = flags } in
-    fun () -> from_context c
+    from_context { (default_context lb) with flags = flags }
 
   let setup_loc lb loc =
     let start_pos = Loc.start_pos loc in

@@ -20,13 +20,25 @@ open Camltoken
 open Lexing
 module Lex = Camllexer.Make(Loc)
 
+let (|>) x f = f x
+let (<.>) f g x = f (g x)
+let id x = x
 let sf = Printf.sprintf
+
+let isWARNING = function
+  | WARNING _ -> true
+  | _         -> false
 
 let rec iter_tokens (f : (caml_token * 'a) -> unit) : (caml_token * 'a) Stream.t -> unit =
   parser
   | [< '(EOI, _) >] -> ()
   | [< 'x ; xs >] -> f x; iter_tokens f xs
   | [<>] -> ()
+
+let rec filter p =
+  parser
+  | [< 'x; xs >] -> if p x then [< 'x; filter p xs >] else filter p xs
+  | [<>] -> [<>]
 
 let rec strings =
   parser
@@ -48,6 +60,11 @@ let rec unparse_tokens =
   | [< '(tok,loc) >] -> Loc.raise loc (Unexpected_token tok)
   | [<>] -> [<>]
 
+let rec rm x = function
+  | [] -> (false, [])
+  | y :: ys -> if x = y then (true, ys)
+               else let (b,zs) = rm x ys in (b, y :: zs)
+
 let main () =
   let usage () = 
     Printf.eprintf "Usage: pplex [<option>] [-|<file.ml>]\n";
@@ -60,12 +77,11 @@ let main () =
     Printf.eprintf " -Q Enable the lexing of quotations\n";
     Printf.eprintf " -A Enable the lexing of anti-quotations\n";
     Printf.eprintf " -d Disable the effect of # line directives\n";
-    Printf.eprintf " -w Disable warnings\n";
+    Printf.eprintf " -w Disable warnings (twice to hide the token as well)\n";
     Printf.eprintf " -h Display this help and exit\n";
     exit 1
   in
   let argv = Array.to_list Sys.argv in
-  let rm x xs = List.mem x xs, List.filter ((<>) x) xs in
   let argv = List.tl argv in
   let positions, argv = rm "-p" argv in
   let locations, argv = rm "-l" argv in
@@ -76,10 +92,9 @@ let main () =
   let antiquotations, argv = rm "-A" argv in
   let no_line_directives, argv = rm "-d" argv in
   let line_directives = not no_line_directives in
-  let not_warnings, argv = rm "-w" argv in
-  let warnings = not not_warnings in
+  let no_warnings, argv = rm "-w" argv in
+  let nor_WARNING, argv = rm "-w" argv in
   let help, argv = rm "-h" argv in
-  let show = show_tokens || positions || locations in
   let () = if help then usage () in
   let filename =
     match argv with
@@ -91,7 +106,6 @@ let main () =
   let ic = if filename = "-" then stdin else open_in filename in
   let flags = { Camllexer.quotations = quotations
               ; antiquotations = antiquotations
-              ; warnings = warnings
               ; line_directives = line_directives } in
   let next = Lex.from_channel flags loc ic in
   let strm = Stream.from (fun _ -> next ()) in
@@ -99,25 +113,24 @@ let main () =
     | (pos, _) :: _ -> Loc.of_postions pos (Loc.stop_pos loc)
     | [] -> loc
   in
-  let dont_raise_errors f (x, loc) = f loc x in
-  let raise_errors f (x, loc) =
+  let show_warnings (x, loc) =
+    match x with
+    | WARNING w -> Printf.eprintf "Warning: %s: %s\n%!" (Loc.to_string loc) (message_of_warning w)
+    | _ -> ()
+  in
+  let raise_errors (x, loc) =
     match x with
     | ERROR(_, (Unterminated us as err)) -> Loc.raise (loc_of_unterminated loc us) (LexError err)
     | ERROR(_, err) -> Loc.raise loc (LexError err)
-    | _ -> f loc x
+    | _ -> ()
   in
-  let seq f g x y = f x y; g x y in
+  let (>>) f g x = f x; g x in
   let print_pos p = Printf.printf "File \"%s\", line %d, character %d\n"
                                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) in
-  let show_token_nl _ x = print_string (show_token x); print_char '\n' in
-  let show_pos loc _ = print_pos (Loc.start_pos loc) in
-  let show_loc loc _ = Printf.printf "%s\n" (Loc.to_string loc) in
-  let show_tokloc =
-    seq (if positions then show_pos else fun _ _ -> ())
-        (seq (if locations then show_loc else fun _ _ -> ())
-             (if show_tokens then show_token_nl else fun _ _ -> ()))
-  in
-  let print_token _ x = print_string (string_of_token x) in
+  let show_token_nl (x, _) = print_string (show_token x); print_char '\n' in
+  let show_pos (_, loc) = print_pos (Loc.start_pos loc) in
+  let show_loc (_, loc) = Printf.printf "%s\n" (Loc.to_string loc) in
+  let print_token (x, _) = print_string (string_of_token x) in
   let rec string_of_exn = function
     | LexError err    -> string_of_error err
     | Token_of_strings_error (name, args) ->
@@ -129,10 +142,16 @@ let main () =
         sf "%s: %s" (Loc.to_string loc) (string_of_exn exn)
     | exn             -> Printexc.to_string exn
   in
+  let show = show_tokens || positions || locations in
   try
-    iter_tokens ((if fault_tolerant then dont_raise_errors else raise_errors)
-                 (if show then show_tokloc else print_token))
-                (if reverse then unparse_tokens strm else strm)
+    (if reverse then unparse_tokens strm else strm) |>
+    (if nor_WARNING then filter (not <.> isWARNING <.> fst) else id) |>
+    iter_tokens ((if no_warnings    then ignore        else show_warnings) >>
+                 (if fault_tolerant then ignore        else raise_errors)  >>
+                 (if positions      then show_pos      else ignore)        >>
+                 (if locations      then show_loc      else ignore)        >>
+                 (if show_tokens    then show_token_nl else ignore)        >>
+                 (if show           then ignore        else print_token))
   with exn ->
     (Printf.eprintf "Error: %s\n%!" (string_of_exn exn); exit 1)
 ;;
