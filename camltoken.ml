@@ -30,7 +30,6 @@ type caml_token =
   | LIDENT        of string
   | UIDENT        of string
   | SYMBOL        of string
-  | PSYMBOL       of blanks * string * blanks
   | INT           of int * string
   | INT32         of int32 * string
   | INT64         of int64 * string
@@ -160,14 +159,6 @@ let message_of_warning = function
   | Comment_start   -> "this is the start of a comment"
   | Comment_not_end -> "this is not the end of a comment"
 
-let string_of_psymbol pre_blanks op post_blanks =
-  assert (op <> "");
-  assert (blanks pre_blanks);
-  assert (blanks post_blanks);
-  let pre_blanks =
-    if pre_blanks = "" && op.[0] = '*' then " " else pre_blanks
-  in
-  sf "(%s%s%s)" pre_blanks op post_blanks
 
 let string_of_line_directive x =
   assert (blanks x.l_blanks1);
@@ -194,7 +185,6 @@ let string_of_token = function
 
   | LABEL         s      -> sf "~%s:" s
   | OPTLABEL      s      -> sf "?%s:" s
-  | PSYMBOL       (x,y,z)-> string_of_psymbol x y z
   | INT32         (_, s) -> sf "%sl" s
   | INT64         (_, s) -> sf "%sL" s
   | NATIVEINT     (_, s) -> sf "%sn" s
@@ -237,7 +227,6 @@ let strings_of_token = function
   | EOI              -> ("EOI", [])
   | WARNING w        -> ("WARNING", strings_of_warning w)
   | ERROR (tok, err) -> ("ERROR", tok :: let (x,xs) = show_error err in x :: xs)
-  | PSYMBOL (x,y,z)  -> ("PSYMBOL", [x; y; z])
   | LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=i;l_blanks2=bl2;
                    l_filename=sopt;l_comment=com;l_newline=nl} ->
       let nl = string_of_newline nl in
@@ -374,8 +363,6 @@ let mkKEYWORD s = KEYWORD s
 let mkLIDENT s = LIDENT s
 let mkUIDENT s = UIDENT s
 let mkSYMBOL s = SYMBOL s
-let mkPSYMBOL ?(pre_blanks="") ?(post_blanks="") s =
-  PSYMBOL(pre_blanks, s, post_blanks)
 let mkLABEL s = LABEL s
 let mkOPTLABEL s = OPTLABEL s
 let mkQUOTATION q = QUOTATION q
@@ -523,7 +510,6 @@ let token_of_strings = function
           end
       | _ -> None
       end
-  | "PSYMBOL", [x; y; z]     -> Some (PSYMBOL (x,y,z))
   | "LINE_DIRECTIVE", xs     ->
       begin match xs with
       (* One are a bit lax in the input *)

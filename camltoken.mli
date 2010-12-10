@@ -24,9 +24,6 @@ type caml_token = (*should we use private here?*)
   | LIDENT of string  (** Lower-case identifiers like `foo', `bar42'... *)
   | UIDENT of string  (** Upper-case identifiers like `Foo', `Bar42'... *)
   | SYMBOL of string  (** Symbol-based identifiers like `*', `++/--'... *)
-  | PSYMBOL of blanks * string * blanks
-                      (** Parenthesized (or prefix) symbol-based
-                          identifiers like `(+)', `( * )', `( */)'...   *)
   | INT of int * string
                       (** Caml int literal like `0', `0xAF', `4_2'...  *)
   | INT32 of int32 * string
@@ -121,7 +118,6 @@ val mkKEYWORD : string -> caml_token
 val mkLIDENT : string -> caml_token
 val mkUIDENT : string -> caml_token
 val mkSYMBOL : string -> caml_token
-val mkPSYMBOL : ?pre_blanks:blanks -> ?post_blanks:blanks -> string -> caml_token
 val mkLABEL : string -> caml_token
 val mkOPTLABEL : string -> caml_token
 val mkQUOTATION : quotation -> caml_token
