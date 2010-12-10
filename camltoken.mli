@@ -54,7 +54,7 @@ type caml_token = (*should we use private here?*)
                       (** Caml new lines: `\n', `\r', or `\r\n'. *)
   | LINE_DIRECTIVE of line_directive
                       (** Caml line directives `# 42', `# 2 "f.ml"' *)
-  | WARNING       of warning
+  | WARNING of warning
                       (** This token warn about some other tokens of the input
                           but does not consume any input. *)
   | ERROR of string * error
