@@ -381,6 +381,9 @@ module Eval = struct
 
 end
 
+let eval_char = Eval.char
+let eval_string = Eval.string
+
 let literal_overflow tok ty = ERROR (tok, Literal_overflow ty)
 let illegal_escape tok s = ERROR (tok, Illegal_escape s)
 
@@ -398,10 +401,10 @@ let cvt_nativeint_literal s =
 let mkWARNING w = WARNING w
 let mkERROR s e = ERROR (s, e)
 
-let mkCHAR s = try CHAR(Eval.char s, s)
+let mkCHAR s = try CHAR(eval_char s, s)
                with Failure _ -> illegal_escape (sf "'%s'" s) s
 
-let mkSTRING     s = try  STRING(Eval.string s, s)
+let mkSTRING     s = try  STRING(eval_string s, s)
                      with Failure _ -> illegal_escape (sf "\"%s\"" s) s
 let mkINT        s = try  INT(cvt_int_literal s, s)
                      with Failure _ -> literal_overflow s "int"
