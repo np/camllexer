@@ -130,6 +130,12 @@ let string_of_quotation {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
   if n = "" then sf "<%s<%s>>" locname s
   else sf "<:%s%s<%s>>" n locname s
 
+(* spec quotation_width = String.length <.> string_of_quotation *)
+let quotation_width {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
+  let locname_width = if l = "" then 0 else String.length l + 1 in
+  if n = "" then String.length s + locname_width + 4
+  else String.length s + String.length n + locname_width + 5
+
 let for_all p s =
   let len = String.length s in
   let rec loop i = i >= len || p s.[i] && loop (i+1)
@@ -151,6 +157,11 @@ let string_of_newline = function
   | CR   -> "\r"
   | CRLF -> "\r\n"
 
+(* spec = String.length <.> string_of_newline *)
+let newline_width = function
+  | LF | CR -> 1
+  | CRLF    -> 2
+
 let strings_of_warning = function
   | Comment_start -> ["Comment_start"]
   | Comment_not_end -> ["Comment_not_end"]
@@ -159,6 +170,12 @@ let message_of_warning = function
   | Comment_start   -> "this is the start of a comment"
   | Comment_not_end -> "this is not the end of a comment"
 
+(* spec String.length <.> string_of_int *)
+let int_width =
+  let rec loop acc x =
+    let q = x / 10 in
+    if q > 0 then loop (1 + acc) q else acc
+  in loop 0
 
 let string_of_line_directive x =
   assert (blanks x.l_blanks1);
@@ -173,6 +190,15 @@ let string_of_line_directive x =
   | None ->
       sf "#%s%s%d%s%s%s" x.l_blanks1 zeros x.l_linenum x.l_blanks2 x.l_comment nl
 
+let line_directive_width x =
+  let nl = newline_width x.l_newline in
+  let fn_w =
+    match x.l_filename with
+    | Some s -> String.length s + 2
+    | None -> 0
+  in
+  String.length x.l_blanks1 + x.l_zeros + int_width x.l_linenum + String.length x.l_blanks2 + fn_w + String.length x.l_comment + nl + 1
+
 let string_of_token = function
   | KEYWORD       s      |
     SYMBOL        s      |
@@ -181,6 +207,7 @@ let string_of_token = function
     COMMENT       s      |
     INT           (_, s) |
     FLOAT         (_, s) |
+    ERROR         (s, _) |
     BLANKS        s -> s
 
   | LABEL         s      -> sf "~%s:" s
@@ -201,8 +228,37 @@ let string_of_token = function
   | NEWLINE nl      -> string_of_newline nl
   | EOI             -> assert false
   | WARNING _       -> ""
-  | ERROR (tok, _)  -> tok
   | LINE_DIRECTIVE ld -> string_of_line_directive ld
+
+(*
+The spec is token_width = String.length <.> string_of_token, that is
+the kind of code where the compiler could deduce the right code from
+the spec.
+*)
+let token_width = function
+  | KEYWORD       s      |
+    SYMBOL        s      |
+    LIDENT        s      |
+    UIDENT        s      |
+    COMMENT       s      |
+    INT           (_, s) |
+    FLOAT         (_, s) |
+    ERROR         (s, _) |
+    BLANKS        s      -> String.length s
+  | LABEL         s      |
+    OPTLABEL      s      |
+    CHAR          (_, s) |
+    STRING        (_, s) |
+    ANTIQUOT     ("", s) -> String.length s + 2
+  | INT32         (_, s) |
+    INT64         (_, s) |
+    NATIVEINT     (_, s) -> String.length s + 1
+  | ANTIQUOT      (n, c) -> String.length n + String.length c + 3
+  | QUOTATION     q -> quotation_width q
+  | NEWLINE nl      -> newline_width nl
+  | EOI             -> 0
+  | WARNING _       -> 0
+  | LINE_DIRECTIVE ld -> line_directive_width ld
 
 let strings_of_token = function
   | KEYWORD s        -> ("KEYWORD", [s])

@@ -166,6 +166,10 @@ val strings_of_token : caml_token -> (string * string list)
 (** Does the oppsite job of show_token *)
 val token_of_strings : (string * string list) -> caml_token option
 
+(** Returns the width of the given token. More precisely
+    it is equal to String.length <.> string_of_token *)
+val token_width : caml_token -> int
+
 (** Show a caml token in an easily parsable format.
     The format is the token name and arguments strings
     separated by one space.
