@@ -434,16 +434,19 @@ module Make (Loc : LOC)
 
   {
 
+
+  let iterator_of_stream s () =
+    match Stream.peek s with
+    | Some x -> Stream.junk s; Some x
+    | None   -> None
+
   (* If we doesn't want to block on waiting input,
      we can't return more than one element at a time. *)
-  let lexing_store s buff max =
+  let lexing_store next buff max =
     assert (max > 0);
-    match Stream.peek s with
-    | Some x ->
-        Stream.junk s;
-        buff.[0] <- x;
-        1
-    | _ -> 0
+    match next () with
+    | Some x -> buff.[0] <- x; 1
+    | _      -> 0
 
   let distribute_location loc = function
     | [] -> []
@@ -497,9 +500,12 @@ module Make (Loc : LOC)
     setup_loc lb loc;
     from_lexbuf flags lb
 
-  let from_stream flags loc strm =
-    let lb = Lexing.from_function (lexing_store strm) in
+  let from_iterator flags loc next =
+    let lb = Lexing.from_function (lexing_store next) in
     setup_loc lb loc;
     from_lexbuf flags lb
+
+  let from_stream flags loc strm =
+    from_iterator flags loc (iterator_of_stream strm)
 end
 }

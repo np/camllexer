@@ -54,4 +54,6 @@ module Make : functor (Loc : LOC) -> sig
   val from_channel : flags -> Loc.t -> in_channel -> token iterator
 
   val from_stream : flags -> Loc.t -> char Stream.t -> token iterator
+
+  val from_iterator : flags -> Loc.t -> char iterator -> token iterator
 end
