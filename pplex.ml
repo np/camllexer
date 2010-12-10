@@ -163,7 +163,12 @@ let main () : unit =
                  (if show_tokens    then show_token_nl else ignore)        >>
                  (if show           then ignore        else print_token))
   with exn ->
-    (Printf.eprintf "Error: %s\n%!" (string_of_exn exn); exit 1)
+    begin
+      if Printexc.backtrace_status () then
+        Printexc.print_backtrace stderr;
+      Printf.eprintf "Error: %s\n%!" (string_of_exn exn);
+      exit 1
+    end
 ;;
 
 main ()
