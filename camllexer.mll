@@ -352,6 +352,8 @@ module Make (Loc : LOC)
     | '(' (not_star_symbolchar as op) ')'
                                                  { mkPSYMBOL (String.make 1 op) }
     | '(' (not_star_symbolchar symbolchar* as op) ')'
+                                       (* Last time I checked, OCaml didn't warn
+                                          this one. *)
                                        { warn_comment_not_end op (mkPSYMBOL op) }
     | '(' (not_star_symbolchar symbolchar* as op) (blank+ as post_blanks) ')'
                                                     { mkPSYMBOL ~post_blanks op }
