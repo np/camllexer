@@ -1,5 +1,7 @@
 build:
 	ocamlbuild pplex.byte substloc.byte
+debug:
+	ocamlbuild -tags debug pplex.byte substloc.byte
 test:
 	INPUTS=`find tests -path '*.t/*' \( -name stdin -o -name '*.ml' \)` ; \
 	./tests/check-roundtrip -f -w $$INPUTS && \
