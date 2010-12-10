@@ -92,12 +92,13 @@ and newline = LF | CR | CRLF
 and warning =
   | Comment_start
   | Comment_not_end
+  | Illegal_escape_in_string of char
 
 and error =
-  | Illegal_character of char
-  | Illegal_escape    of string
-  | Unterminated      of (Lexing.position * unterminated) list
-  | Literal_overflow  of string
+  | Illegal_character           of char
+  | Illegal_escape_in_character of string
+  | Unterminated                of (Lexing.position * unterminated) list
+  | Literal_overflow            of string
 
 and unterminated =
   | Ucomment
@@ -106,7 +107,7 @@ and unterminated =
   | Uantiquot
 
 val mkCHAR : string -> caml_token
-val mkSTRING : string -> caml_token
+val mkSTRING : string -> caml_token * caml_token list
 val mkINT : string -> caml_token
 val mkINT32 : string -> caml_token
 val mkINT64 : string -> caml_token
@@ -192,14 +193,18 @@ val newline_of_string : string -> newline
 val message_of_warning : warning -> string
 
 val eval_char : string -> char
-      (** Convert a char token, where the escape sequences (backslashes)
-          remain to be interpreted; raise [Failure] if an
-          incorrect backslash sequence is found; [Camltoken.Eval.char (Char.escaped c)]
-          returns [c] *)
+  (** Given a char literal body, it interprets the escape sequences (backslashes)
+      and return the interpreted or raise [Failure] if an incorrect escape
+      sequence is found.
 
-val eval_string : ?strict:unit -> string -> string
-      (** [Camltoken.Eval.string strict s]
-          Convert a string token, where the escape sequences (backslashes)
-          remain to be interpreted; raise [Failure] if [strict] and an
-          incorrect backslash sequence is found;
-          [Camltoken.Eval.string strict (String.escaped s)] returns [s] *)
+      Note that [Camltoken.eval_char (Char.escaped c)] returns [c] *)
+
+val eval_string : string -> string * int list
+  (** [Camltoken.eval_string s]
+      Given a literal string body, it interprets the escape sequences (backslashes)
+      and return the interpreted string plus a list of incorrect escape
+      sequences.
+      For each incorrect escape sequence, the list holds the offset of the
+      first character of the escape sequence (i.e. the character after the backslash).
+
+      Note that [fst (Camltoken.eval_string (String.escaped s))] returns [s] *)

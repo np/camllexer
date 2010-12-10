@@ -53,12 +53,13 @@ and newline = LF | CR | CRLF
 and warning =
   | Comment_start
   | Comment_not_end
+  | Illegal_escape_in_string of char
 
 and error =
-  | Illegal_character of char
-  | Illegal_escape    of string
-  | Unterminated      of (Lexing.position * unterminated) list
-  | Literal_overflow  of string
+  | Illegal_character           of char
+  | Illegal_escape_in_character of string
+  | Unterminated                of (Lexing.position * unterminated) list
+  | Literal_overflow            of string
 
 and unterminated =
   | Ucomment
@@ -92,8 +93,8 @@ let string_of_error =
   function
   | Illegal_character c ->
       sf "Illegal character (%s)" (Char.escaped c)
-  | Illegal_escape s ->
-      sf "Illegal backslash escape in string or character (%s)" s
+  | Illegal_escape_in_character s ->
+      sf "Illegal backslash escape in character literal (%s)" s
   | Unterminated [(_,u)] ->
       sf "Unterminated %s" (string_of_unterminated u)
   | Unterminated ((_,u) :: us) ->
@@ -119,10 +120,14 @@ let show2 s1 s2 (x, y) = s1 x @ s2 y
 (* meant to be used by show_token/strings_of_token *)
 let show_error =
   function
-  | Illegal_character _ -> ("Illegal_character", [])
-  | Illegal_escape s    -> ("Illegal_escape",    [s])
-  | Unterminated us     -> ("Unterminated",      List.concat (List.map (show2 show_position show_unterminated) us))
-  | Literal_overflow ty -> ("Literal_overflow",  [ty])
+  | Illegal_character _ ->
+      ("Illegal_character", [])
+  | Illegal_escape_in_character s ->
+      ("Illegal_escape_in_character", [s])
+  | Unterminated us ->
+      ("Unterminated", List.concat (List.map (show2 show_position show_unterminated) us))
+  | Literal_overflow ty ->
+      ("Literal_overflow", [ty])
 
 let string_of_quotation {q_name=n; q_loc=l; q_contents=s} =
   let locname = if l = "" then "" else sf "@%s" l in
@@ -164,10 +169,12 @@ let newline_width = function
 let strings_of_warning = function
   | Comment_start -> ["Comment_start"]
   | Comment_not_end -> ["Comment_not_end"]
+  | Illegal_escape_in_string c -> ["Illegal_escape_in_string"; Char.escaped c]
 
 let message_of_warning = function
   | Comment_start   -> "this is the start of a comment"
   | Comment_not_end -> "this is not the end of a comment"
+  | Illegal_escape_in_string c -> sf "Illegal backslash escape in string (\\%c)" c
 
 (* spec String.length <.> string_of_int *)
 let int_width =
@@ -357,33 +364,34 @@ module Eval = struct
                eof s i; c
            with Backtrack -> failwith "invalid char token"
 
-  let backslash_in_string strict store s i =
+  let backslash_in_string err store s i =
     match peek s i with
     | Some '\n' -> skip_indent s (i+1)
     | Some '\r' -> skip_indent s (skip_opt_linefeed s (i+1))
     | Some c ->
         begin try let (x, i) = escaped_char s i in store x; i
-        with Backtrack when not strict -> (store '\\'; store c; i + 1)
+        with Failure _ | Backtrack -> (store '\\'; store c; err (); i + 1)
         end
     | None -> failwith "invalid string token"
 
-  let string ?strict s =
+  let string s =
     let buf = Buffer.create 23 in
     let store = Buffer.add_char buf in
+    let errors = ref [] in
+    let err i () = errors := i :: !errors in
     let rec parse i =
       match peek s i with
-      | Some '\\' -> parse (backslash_in_string (strict <> None) store s (i+1))
+      | Some '\\' -> parse (backslash_in_string (err (i+1)) store s (i+1))
       | Some c    -> store c; parse (i+1)
       | None      -> Buffer.contents buf
-    in parse 0
+    in
+    let s = parse 0 in
+    s, List.rev !errors
 
 end
 
 let eval_char = Eval.char
 let eval_string = Eval.string
-
-let literal_overflow tok ty = ERROR (tok, Literal_overflow ty)
-let illegal_escape tok s = ERROR (tok, Illegal_escape s)
 
 (* To convert integer literals, allowing max_int + 1 (PR#4210) *)
 
@@ -399,11 +407,17 @@ let cvt_nativeint_literal s =
 let mkWARNING w = WARNING w
 let mkERROR s e = ERROR (s, e)
 
-let mkCHAR s = try CHAR(eval_char s, s)
-               with Failure _ -> illegal_escape (sf "'%s'" s) s
+let literal_overflow tok ty = mkERROR tok (Literal_overflow ty)
+let illegal_escape_in_character tok s = mkERROR tok (Illegal_escape_in_character s)
+let illegal_escape_in_string s ofs =
+  mkWARNING (Illegal_escape_in_string
+    (try s.[ofs] with Invalid_argument _ -> assert false))
 
-let mkSTRING     s = try  STRING(eval_string s, s)
-                     with Failure _ -> illegal_escape (sf "\"%s\"" s) s
+let mkCHAR s = try CHAR(eval_char s, s)
+               with Failure _ -> illegal_escape_in_character (sf "'%s'" s) s
+
+let mkSTRING     s = let s', errs = eval_string s in
+                     STRING(s', s), List.map (illegal_escape_in_string s) errs
 let mkINT        s = try  INT(cvt_int_literal s, s)
                      with Failure _ -> literal_overflow s "int"
 let mkINT32      s = try  INT32(cvt_int32_literal s, s)
@@ -525,6 +539,8 @@ let parse_position_unterminated_list =
 let warning_of_strings = function
   | ["Comment_start"] -> Some Comment_start
   | ["Comment_not_end"] -> Some Comment_not_end
+  | ["Illegal_escape_in_string"; s] ->
+      Some (Illegal_escape_in_string (eval_char s))
   | _ -> None
 
 let token_of_strings = function
@@ -538,7 +554,7 @@ let token_of_strings = function
   | "NATIVEINT", [s]         -> Some (mkNATIVEINT s)
   | "FLOAT", [s]             -> Some (mkFLOAT s)
   | "CHAR", [s]              -> Some (mkCHAR s)
-  | "STRING", [s]            -> Some (mkSTRING s)
+  | "STRING", [s]            -> Some (fst (mkSTRING s))
   | "LABEL", [s]             -> Some (LABEL s)
   | "OPTLABEL", [s]          -> Some (OPTLABEL s)
   | "ANTIQUOT", [n; s]       -> Some (ANTIQUOT(n, s))
@@ -556,7 +572,7 @@ let token_of_strings = function
       let mk err = Some (ERROR (tok, err)) in
       begin match x, xs with
       | "Illegal_character", []  -> assert (tok <> ""); mk (Illegal_character tok.[0])
-      | "Illegal_escape",    [s] -> mk (Illegal_escape s)
+      | "Illegal_escape_in_character", [s] -> mk (Illegal_escape_in_character s)
       | "Literal_overflow",  [t] -> mk (Literal_overflow t)
       | "Unterminated",      us  ->
           begin match parse_full parse_position_unterminated_list us with

@@ -312,7 +312,7 @@ module Make (Loc : LOC)
     | (int_literal as i) "l"                                      { [mkINT32 i] }
     | (int_literal as i) "L"                                      { [mkINT64 i] }
     | (int_literal as i) "n"                                  { [mkNATIVEINT i] }
-    | '"' (string_char* as s) '"'                  { update_loc c; [mkSTRING s] }
+    | '"' (string_char* as s) '"'  { update_loc c; let x,y = mkSTRING s in x::y }
     | unterminated_string as s                     {               update_loc c ;
                                                     [unterminated1 s Ustring c] }
     | "'" (char_litteral as s) "'"                   { update_loc c; [mkCHAR s] }
