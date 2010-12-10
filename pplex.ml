@@ -65,8 +65,8 @@ let rec rm x = function
   | y :: ys -> if x = y then (true, ys)
                else let (b,zs) = rm x ys in (b, y :: zs)
 
-let main () =
-  let usage () = 
+let main () : unit =
+  let usage () =
     Printf.eprintf "Usage: pplex [<option>] [-|<file.ml>]\n";
     Printf.eprintf "Options:\n";
     Printf.eprintf " -s Show the token in a easily parsable format\n";
