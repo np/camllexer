@@ -181,7 +181,7 @@ module Make (Loc : LOC)
 
   let warn_comment_not_end op tail =
     if op <> "" && op.[String.length op - 1] = '*' then
-      mkWARNING Comment_not_end :: tail
+      tail @ [mkWARNING Comment_not_end]
     else tail
 
   let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
