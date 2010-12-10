@@ -38,10 +38,6 @@ type caml_token = (*should we use private here?*)
                       (** Caml char literal like `'x'', `'\n'', `\xAF'... *)
   | STRING of string * string
                       (** Caml string literal like `"bla"', `"a\n\xAF"'... *)
-  | LABEL of string
-                      (** Caml label like `~foo:', `~bar:'... *)
-  | OPTLABEL of string
-                      (** Caml optional label like `?foo:', `?bar:'... *)
   | QUOTATION of quotation
                       (** Caml(p4) quotations like `<<bla>>', `<:foo<bar>>'... *)
   | ANTIQUOT of string * string
@@ -118,8 +114,6 @@ val mkKEYWORD : string -> caml_token
 val mkLIDENT : string -> caml_token
 val mkUIDENT : string -> caml_token
 val mkSYMBOL : string -> caml_token
-val mkLABEL : string -> caml_token
-val mkOPTLABEL : string -> caml_token
 val mkQUOTATION : quotation -> caml_token
 val mkANTIQUOT : ?name:string -> string -> caml_token
 val mkCOMMENT : comment -> caml_token

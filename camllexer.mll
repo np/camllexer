@@ -201,6 +201,9 @@ module Make (Loc : LOC)
                  (   mkSYMBOL ")"
                  ::  may_warn))
 
+  let mkLABEL s = [SYMBOL "~"; LIDENT s; SYMBOL ":"]
+  let mkOPTLABEL s = [SYMBOL "?"; LIDENT s; SYMBOL ":"]
+
   let parse_comment comment c =
     let sp = c.lexbuf.lex_start_p in
     let r = parse_in Ucomment comment c in
@@ -307,8 +310,8 @@ module Make (Loc : LOC)
     | '\r'                                   { update_chars c 0; [mkNEWLINE CR] }
     | "\r\n"                               { update_chars c 0; [mkNEWLINE CRLF] }
     | blank + as x                                               { [mkBLANKS x] }
-    | "~" (lowercase identchar * as x) ':'                        { [mkLABEL x] }
-    | "?" (lowercase identchar * as x) ':'                     { [mkOPTLABEL x] }
+    | "~" (lowercase identchar * as x) ':'                          { mkLABEL x }
+    | "?" (lowercase identchar * as x) ':'                       { mkOPTLABEL x }
     | lowercase identchar * as x                                 { [mkLIDENT x] }
     | uppercase identchar * as x                                 { [mkUIDENT x] }
     | int_literal as i                                              { [mkINT i] }

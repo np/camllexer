@@ -36,8 +36,6 @@ type caml_token =
   | FLOAT         of float * string
   | CHAR          of char * string
   | STRING        of string * string
-  | LABEL         of string
-  | OPTLABEL      of string
   | QUOTATION     of quotation
   | ANTIQUOT      of string * string
   | COMMENT       of comment
@@ -217,8 +215,6 @@ let string_of_token = function
     ERROR         (s, _) |
     BLANKS        s -> s
 
-  | LABEL         s      -> sf "~%s:" s
-  | OPTLABEL      s      -> sf "?%s:" s
   | INT32         (_, s) -> sf "%sl" s
   | INT64         (_, s) -> sf "%sL" s
   | NATIVEINT     (_, s) -> sf "%sn" s
@@ -252,9 +248,7 @@ let token_width = function
     FLOAT         (_, s) |
     ERROR         (s, _) |
     BLANKS        s      -> String.length s
-  | LABEL         s      |
-    OPTLABEL      s      |
-    CHAR          (_, s) |
+  | CHAR          (_, s) |
     STRING        (_, s) |
     ANTIQUOT     ("", s) -> String.length s + 2
   | INT32         (_, s) |
@@ -279,8 +273,6 @@ let strings_of_token = function
   | FLOAT(_, s)      -> ("FLOAT", [s])
   | CHAR(_, s)       -> ("CHAR", [s])
   | STRING(_, s)     -> ("STRING", [s]) (* here we give the source string *)
-  | LABEL s          -> ("LABEL", [s])
-  | OPTLABEL s       -> ("OPTLABEL", [s])
   | ANTIQUOT(n, s)   -> ("ANTIQUOT", [n; s])
   | QUOTATION x      -> ("QUOTATION", [x.q_name; x.q_loc; x.q_contents])
   | COMMENT s        -> ("COMMENT", [s])
@@ -439,8 +431,6 @@ let mkKEYWORD s = KEYWORD s
 let mkLIDENT s = LIDENT s
 let mkUIDENT s = UIDENT s
 let mkSYMBOL s = SYMBOL s
-let mkLABEL s = LABEL s
-let mkOPTLABEL s = OPTLABEL s
 let mkQUOTATION q = QUOTATION q
 let mkANTIQUOT ?(name="") s = ANTIQUOT (name, s)
 let mkCOMMENT com = COMMENT com
@@ -560,8 +550,6 @@ let token_of_strings = function
   | "FLOAT", [s]             -> Some (mkFLOAT s)
   | "CHAR", [s]              -> Some (mkCHAR s)
   | "STRING", [s]            -> Some (fst (mkSTRING s))
-  | "LABEL", [s]             -> Some (LABEL s)
-  | "OPTLABEL", [s]          -> Some (OPTLABEL s)
   | "ANTIQUOT", [n; s]       -> Some (ANTIQUOT(n, s))
   | "QUOTATION", [n;l;c]     -> Some (QUOTATION{q_name=n;q_loc=l;q_contents=c})
   | "COMMENT", [s]           -> Some (COMMENT s)
