@@ -30,7 +30,7 @@ val ghost : t
 (** {6 Conversion functions} *)
 
 (** Return a location from a couple of postitions. *)
-val of_postions : Lexing.position -> Lexing.position -> t
+val of_positions : Lexing.position -> Lexing.position -> t
 
 (** Return a location from ocamllex buffer. *)
 val of_lexbuf : Lexing.lexbuf -> t

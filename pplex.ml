@@ -110,7 +110,7 @@ let main () =
   let next = Lex.from_channel flags loc ic in
   let strm = Stream.from (fun _ -> next ()) in
   let loc_of_unterminated loc = function
-    | (pos, _) :: _ -> Loc.of_postions pos (Loc.stop_pos loc)
+    | (pos, _) :: _ -> Loc.of_positions pos (Loc.stop_pos loc)
     | [] -> loc
   in
   let show_warnings (x, loc) =

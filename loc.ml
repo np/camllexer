@@ -67,14 +67,14 @@ let better_file_name a b =
   | (x, "-") -> x
   | (x, _)   -> x
 
-let of_postions start stop =
+let of_positions start stop =
   { file_name = better_file_name start.Lexing.pos_fname stop.Lexing.pos_fname;
     start     = pos_of_lexing_position start;
     stop      = pos_of_lexing_position stop;
     ghost     = false }
 
 let of_lexbuf lb =
-  of_postions (Lexing.lexeme_start_p lb) (Lexing.lexeme_end_p lb)
+  of_positions (Lexing.lexeme_start_p lb) (Lexing.lexeme_end_p lb)
 
 let start_pos x = pos_to_lexing_position x.start x.file_name
 
