@@ -206,11 +206,10 @@ module Make (Loc : LOC)
     | [] -> mkCOMMENT contents
     | us -> unterminated contents us
 
-  let parse_quotation quotation c name loc shift =
+  let parse_quotation quotation c name loc =
     let mk contents =
       { q_name     = name     ;
         q_loc      = loc      ;
-        q_shift    = shift    ;
         q_contents = contents }
     in
     let sp = c.lexbuf.lex_start_p in
@@ -231,7 +230,6 @@ module Make (Loc : LOC)
   let identchar =
     ['A'-'Z' 'a'-'z' '_' '\192'-'\214' '\216'-'\246' '\248'-'\255' '\'' '0'-'9']
   let ident = (lowercase|uppercase) identchar*
-  let locname = ident
   let not_star_symbolchar =
     ['$' '!' '%' '&' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~' '\\']
   let symbolchar = '*' | not_star_symbolchar
@@ -323,11 +321,11 @@ module Make (Loc : LOC)
     | "<<" (quotchar* as beginning)
       { if quotations c
         then (move_sp (-String.length beginning) c;
-              [parse_quotation quotation c "" "" 2])
+              [parse_quotation quotation c "" ""])
         else parse (symbolchar_star ("<<" ^ beginning)) c                       }
     | "<<>>"
       { if quotations c
-        then [mkQUOTATION { q_name = ""; q_loc = ""; q_shift = 2; q_contents = "" }]
+        then [mkQUOTATION { q_name = ""; q_loc = ""; q_contents = "" }]
         else parse (symbolchar_star "<<>>") c                                   }
     | "<@"
       { if quotations c then parse_with_sp left_angle_at c
@@ -380,7 +378,7 @@ module Make (Loc : LOC)
                                                     parse_in Ucomment comment c &
                                                                parse' comment c }
     | "*)"                                                        { store c; [] }
-    | '<' (':' ident)? ('@' locname)? '<'
+    | '<' (':' ident)? ('@' ident)? '<'
                 { store c;
                   (if quotations c then parse_in Uquotation quotation c else []) &
                   parse' comment c }
@@ -399,21 +397,18 @@ module Make (Loc : LOC)
 
   (* <@ *)
   and left_angle_at c = parse
-    | (ident as loc) '<'
-                 { [parse_quotation quotation c "" loc (1 + String.length loc)] }
+    | (ident as loc) '<'                 { [parse_quotation quotation c "" loc] }
     | symbolchar* as tok                               { [mkSYMBOL("<@" ^ tok)] }
 
   (* <: *)
   and left_angle_colon c = parse
-    | (ident as name) '<'
-               { [parse_quotation quotation c name "" (1 + String.length name)] }
-    | (ident as name) '@' (locname as loc) '<'
-                            { [parse_quotation quotation c name loc
-                                  (2 + String.length loc + String.length name)] }
+    | (ident as name) '<'               { [parse_quotation quotation c name ""] }
+    | (ident as name) '@' (ident as loc) '<'
+                                       { [parse_quotation quotation c name loc] }
     | symbolchar* as tok                               { [mkSYMBOL("<:" ^ tok)] }
 
   and quotation c = parse
-    | '<' (':' ident)? ('@' locname)? '<'           {                   store c ;
+    | '<' (':' ident)? ('@' ident)? '<'      {                          store c ;
                                                 parse_in Uquotation quotation c &
                                                              parse' quotation c }
     | ">>"                                                        { store c; [] }
@@ -431,7 +426,7 @@ module Make (Loc : LOC)
     | eof    {                                                      set_sp c sp ;
                [unterminated1 (sf "$%s:%s" name (buff_contents c)) Uantiquot c] }
     | newline              { update_chars c 0; store_parse (antiquot sp name) c }
-    | '<' (':' ident)? ('@' locname)? '<'
+    | '<' (':' ident)? ('@' ident)? '<'
       { store c; match parse_in Uquotation quotation c with
                  | [] -> parse (antiquot sp name) c
                  | stack -> [unterminated (buff_contents c) stack] }

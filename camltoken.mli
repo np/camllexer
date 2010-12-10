@@ -65,12 +65,10 @@ type caml_token = (*should we use private here?*)
 
 (** The generic quotation type.
     To see how fields are used here is an example:
-       <:q_name@q_loc<q_contents>>
-    The last one, q_shift is equal to the length of "<:q_name@q_loc<". *)
+       <:q_name@q_loc<q_contents>> *)
 and quotation = {
   q_name : string;
   q_loc : string;
-  q_shift : int;
   q_contents : string;
 }
 

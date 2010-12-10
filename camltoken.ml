@@ -19,7 +19,6 @@
 type quotation =
   { q_name     : string ;
     q_loc      : string ;
-    q_shift    : int    ;
     q_contents : string }
 
 type blanks = string
@@ -125,13 +124,13 @@ let show_error =
   | Unterminated us     -> ("Unterminated",      List.concat (List.map (show2 show_position show_unterminated) us))
   | Literal_overflow ty -> ("Literal_overflow",  [ty])
 
-let string_of_quotation {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
+let string_of_quotation {q_name=n; q_loc=l; q_contents=s} =
   let locname = if l = "" then "" else sf "@%s" l in
   if n = "" then sf "<%s<%s>>" locname s
   else sf "<:%s%s<%s>>" n locname s
 
 (* spec quotation_width = String.length <.> string_of_quotation *)
-let quotation_width {q_name=n; q_loc=l; q_shift=_; q_contents=s} =
+let quotation_width {q_name=n; q_loc=l; q_contents=s} =
   let locname_width = if l = "" then 0 else String.length l + 1 in
   if n = "" then String.length s + locname_width + 4
   else String.length s + String.length n + locname_width + 5
@@ -275,8 +274,7 @@ let strings_of_token = function
   | LABEL s          -> ("LABEL", [s])
   | OPTLABEL s       -> ("OPTLABEL", [s])
   | ANTIQUOT(n, s)   -> ("ANTIQUOT", [n; s])
-  | QUOTATION x      -> ("QUOTATION", [x.q_name; x.q_loc;
-                                       string_of_int x.q_shift; x.q_contents])
+  | QUOTATION x      -> ("QUOTATION", [x.q_name; x.q_loc; x.q_contents])
   | COMMENT s        -> ("COMMENT", [s])
   | BLANKS s         -> ("BLANKS", [s])
   | NEWLINE nl       -> ("NEWLINE", [string_of_newline nl])
@@ -544,9 +542,7 @@ let token_of_strings = function
   | "LABEL", [s]             -> Some (LABEL s)
   | "OPTLABEL", [s]          -> Some (OPTLABEL s)
   | "ANTIQUOT", [n; s]       -> Some (ANTIQUOT(n, s))
-  | "QUOTATION", [n;l;s;c]   -> Some (QUOTATION{q_name=n;q_loc=l
-                                               ;q_shift=int_of_string s
-                                               ;q_contents=c})
+  | "QUOTATION", [n;l;c]     -> Some (QUOTATION{q_name=n;q_loc=l;q_contents=c})
   | "COMMENT", [s]           -> Some (COMMENT s)
   | "BLANKS", [s]            -> Some (BLANKS s)
   | "NEWLINE", []            -> Some (NEWLINE LF) (* lax in the input *)
