@@ -47,12 +47,16 @@ module type LOC = sig
   type t
   val ghost : t
   val of_lexbuf : Lexing.lexbuf -> t
+  val of_positions : Lexing.position -> Lexing.position -> t
   val move_both : int -> t -> t
   val start_pos  : t -> Lexing.position
+  val stop_pos  : t -> Lexing.position
   val to_string : t -> string
   exception Exc_located of t * exn
   val raise : t -> exn -> 'a
 end
+
+let (<.>) f g x = f (g x)
 
 let sf = Printf.sprintf
 
@@ -102,11 +106,11 @@ module Make (Loc : LOC)
 
   (* Various location/postion related functions *)
 
+  let (>>>) p k = { p with pos_cnum = p.pos_cnum + k }
   let set_sp c sp = c.lexbuf.lex_start_p <- sp
   let get_sp c = c.lexbuf.lex_start_p
   let move_sp shift c =
-    let p = c.lexbuf.lex_start_p in
-    c.lexbuf.lex_start_p <- { (p) with pos_cnum = p.pos_cnum + shift }
+    c.lexbuf.lex_start_p <- c.lexbuf.lex_start_p >>> shift
 
   (* Update the current location with file name and line number. *)
 
@@ -446,6 +450,20 @@ module Make (Loc : LOC)
         1
     | _ -> 0
 
+  let distribute_location loc = function
+    | [] -> []
+    | [tok] -> [(tok, loc)]
+    | [WARNING _ as wtok; tok] -> [(wtok, loc); (tok, loc)]
+    | toks ->
+      let token_width = String.length <.> string_of_token in
+      let rec loop p = function
+        | [] -> assert (p = Loc.stop_pos loc); []
+        | tok :: toks ->
+            let w = token_width tok in
+            let p' = p >>> w in
+            (tok, Loc.of_positions p p') :: loop p' toks
+      in loop (Loc.start_pos loc) toks
+
   (* I do not really know what to do about the ``end of input''.
      I see various options:
        1/ The output stream is infinite and repeats EOI indefinitely
@@ -463,7 +481,7 @@ module Make (Loc : LOC)
     let next_list () =
       let toks = parse token c in
       let loc = Loc.of_lexbuf c.lexbuf in
-      List.map (fun tok -> (tok, loc)) toks
+      distribute_location loc toks
     in flatten_iterator_list next_list
 
   let from_lexbuf flags lb =
