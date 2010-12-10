@@ -1,6 +1,6 @@
 (* COMMENT, SYMBOL, LIDENT, INT, BLANKS, NEWLINE *)
 let x  =  42
-(* UIDENT, PSYMBOL, INT32, INT64, NATIVEINT, CHAR, STRING *)
+(* UIDENT, INT32, INT64, NATIVEINT, CHAR, STRING *)
 let (Some (+)) = Some (42l, 42L, 42n, 4.2, '?', '\'', '\n',
                        "string", "\t\n\"'", "
 ",'
