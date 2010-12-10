@@ -451,11 +451,11 @@ module Make (Loc : LOC)
   let distribute_location loc = function
     | [] -> []
     | [tok] -> [(tok, loc)]
-    | [WARNING _ as wtok; tok] -> [(wtok, loc); (tok, loc)]
     | toks ->
       let token_width = String.length <.> string_of_token in
       let rec loop p = function
         | [] -> assert (p = Loc.stop_pos loc); []
+        | WARNING _ as wtok :: toks -> (wtok, loc) :: loop p toks
         | tok :: toks ->
             let w = token_width tok in
             let p' = p >>> w in
