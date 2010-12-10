@@ -182,6 +182,17 @@ module Make (Loc : LOC)
 
   let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
 
+  let mkBLANKS_ s tail =
+    match s with
+    | "" -> tail
+    | s  -> mkBLANKS s :: tail
+
+  let mkPSYMBOL ?(pre_blanks="") ?(post_blanks="") s =
+    mkSYMBOL "(" ::  mkBLANKS_ pre_blanks
+                 (   mkSYMBOL s
+                 ::  mkBLANKS_ post_blanks
+                 (   [mkSYMBOL ")"]))
+
   let parse_comment comment c =
     let sp = c.lexbuf.lex_start_p in
     let r = parse_in Ucomment comment c in
@@ -337,15 +348,15 @@ module Make (Loc : LOC)
                                                    l_comment=com;
                                                    l_newline=nl}] }
     | '(' (not_star_symbolchar as op) ')'
-                                               { [mkPSYMBOL (String.make 1 op)] }
+                                                 { mkPSYMBOL (String.make 1 op) }
     | '(' (not_star_symbolchar symbolchar* as op) ')'
-                                       { warn_comment_not_end op [mkPSYMBOL op] }
+                                       { warn_comment_not_end op (mkPSYMBOL op) }
     | '(' (not_star_symbolchar symbolchar* as op) (blank+ as post_blanks) ')'
-                                                  { [mkPSYMBOL ~post_blanks op] }
+                                                    { mkPSYMBOL ~post_blanks op }
     | '(' (blank+ as pre_blanks) (symbolchar+ as op) ')'
-                           { warn_comment_not_end op [mkPSYMBOL ~pre_blanks op] }
+                           { warn_comment_not_end op (mkPSYMBOL ~pre_blanks op) }
     | '(' (blank+ as pre_blanks) (symbolchar+ as op) (blank+ as post_blanks) ')'
-                                      { [mkPSYMBOL ~pre_blanks ~post_blanks op] }
+                                        { mkPSYMBOL ~pre_blanks ~post_blanks op }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"
       | ":=" | ":>" | ";"  | ";;" | "_"
       | left_delimitor | right_delimitor ) as x                  { [mkSYMBOL x] }
