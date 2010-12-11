@@ -1,2 +1,3 @@
-ERROR "\"\\705\"" "Illegal_escape" "\\705"
+STRING "\\705"
+WARNING "Illegal_escape_in_string" "705" "1"
 NEWLINE "\n"

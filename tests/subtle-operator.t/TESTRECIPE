@@ -1,8 +1,8 @@
 #!/bin/bash
 
-testname='string-esc-overflow.t'
+testname='subtle-operator.t'
 command="$PPLEX"
-args=( '-f' '-s' 'input.ml' )
+args=( '-s' 'input.ml' )
 exit_code='0'
 stdin_file='/dev/null'
 stdout_file='stdout'

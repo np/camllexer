@@ -1,2 +1,2 @@
-ERROR "'\\705'" "Illegal_escape" "\\705"
+ERROR "'\\705'" "Illegal_escape_in_character" "\\705"
 NEWLINE "\n"

@@ -1,2 +1,3 @@
 STRING "\\2"
+WARNING "Illegal_escape_in_string" "2" "1"
 NEWLINE "\n"
