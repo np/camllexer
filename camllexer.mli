@@ -43,17 +43,17 @@ val default_flags : flags
     and line_directives are honored. *)
 
 module Make : functor (Loc : LOC) -> sig
+  open Lexing
+
   type token = Camltoken.caml_token * Loc.t
 
-  val setup_loc : Lexing.lexbuf -> Loc.t -> unit
+  val from_lexbuf : flags -> position -> lexbuf -> token iterator
 
-  val from_lexbuf : flags -> Lexing.lexbuf -> token iterator
+  val from_string : flags -> position -> string -> token iterator
 
-  val from_string : flags -> Loc.t -> string -> token iterator
+  val from_channel : flags -> position -> in_channel -> token iterator
 
-  val from_channel : flags -> Loc.t -> in_channel -> token iterator
+  val from_stream : flags -> position -> char Stream.t -> token iterator
 
-  val from_stream : flags -> Loc.t -> char Stream.t -> token iterator
-
-  val from_iterator : flags -> Loc.t -> char iterator -> token iterator
+  val from_iterator : flags -> position -> char iterator -> token iterator
 end

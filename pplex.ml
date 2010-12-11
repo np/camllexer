@@ -77,6 +77,8 @@ let rec rm x = function
   | y :: ys -> if x = y then (true, ys)
                else let (b,zs) = rm x ys in (b, y :: zs)
 
+let mk_position fp = { pos_fname = fp; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }
+
 let main () : unit =
   let usage () =
     Printf.eprintf "Usage: pplex [<option>] [-|<file.ml>]\n";
@@ -114,7 +116,7 @@ let main () : unit =
     | []          -> "-"
     | _           -> usage ()
   in
-  let loc = Loc.mk filename in
+  let loc = mk_position filename in
   let ic = if filename = "-" then stdin else open_in filename in
   let flags = { Camllexer.quotations = quotations
               ; antiquotations = antiquotations

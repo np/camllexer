@@ -485,30 +485,24 @@ module Make (Loc : LOC)
       distribute_location loc toks
     in flatten_iterator_list next_list
 
-  let from_lexbuf flags lb =
+  let from_lexbuf flags pos lb =
+    lb.lex_abs_pos <- pos.pos_cnum;
+    lb.lex_curr_p  <- pos;
     from_context { (default_context lb) with flags = flags }
 
-  let setup_loc lb loc =
-    let start_pos = Loc.start_pos loc in
-    lb.lex_abs_pos <- start_pos.pos_cnum;
-    lb.lex_curr_p  <- start_pos
-
-  let from_string flags loc str =
+  let from_string flags pos str =
     let lb = Lexing.from_string str in
-    setup_loc lb loc;
-    from_lexbuf flags lb
+    from_lexbuf flags pos lb
 
-  let from_channel flags loc ic =
+  let from_channel flags pos ic =
     let lb = Lexing.from_channel ic in
-    setup_loc lb loc;
-    from_lexbuf flags lb
+    from_lexbuf flags pos lb
 
-  let from_iterator flags loc next =
+  let from_iterator flags pos next =
     let lb = Lexing.from_function (lexing_store next) in
-    setup_loc lb loc;
-    from_lexbuf flags lb
+    from_lexbuf flags pos lb
 
-  let from_stream flags loc strm =
-    from_iterator flags loc (iterator_of_stream strm)
+  let from_stream flags pos strm =
+    from_iterator flags pos (iterator_of_stream strm)
 end
 }
