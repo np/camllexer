@@ -53,7 +53,7 @@ and newline = LF | CR | CRLF
 and warning =
   | Comment_start
   | Comment_not_end
-  | Illegal_escape_in_string of char
+  | Illegal_escape_in_string of string * int
 
 and error =
   | Illegal_character           of char
@@ -169,12 +169,13 @@ let newline_width = function
 let strings_of_warning = function
   | Comment_start -> ["Comment_start"]
   | Comment_not_end -> ["Comment_not_end"]
-  | Illegal_escape_in_string c -> ["Illegal_escape_in_string"; Char.escaped c]
+  | Illegal_escape_in_string(s, i) ->
+      ["Illegal_escape_in_string"; s; string_of_int i]
 
 let message_of_warning = function
   | Comment_start   -> "this is the start of a comment"
   | Comment_not_end -> "this is not the end of a comment"
-  | Illegal_escape_in_string c -> sf "Illegal backslash escape in string (\\%c)" c
+  | Illegal_escape_in_string(s,_) -> sf "Illegal backslash escape in string (\\%s)" s
 
 (* spec String.length <.> string_of_int *)
 let int_width =
@@ -302,16 +303,12 @@ let show_token t =
 
 module Eval = struct
 
-  let valch x = Char.code x - Char.code '0'
-  let valch_hex x =
-    let d = Char.code x in
-    if d >= 97 then d - 87
-    else if d >= 65 then d - 55
-    else d - 48
-
-  exception Backtrack
+  exception Backtrack of int
 
   let peek s i = if i < String.length s then Some s.[i] else None
+  let get s i =
+    let len = String.length s in
+    if i < len then s.[i] else raise (Backtrack (len - 1))
 
   let rec skip_indent s i =
     match peek s i with
@@ -323,36 +320,44 @@ module Eval = struct
     | Some '\n' -> i + 1
     | _ -> i
 
-  let chr c =
-    if c < 0 || c > 255 then failwith "invalid char token" else Char.chr c
+  let get_dec_digit s i =
+    match get s i with
+    | '0'..'9' as c -> Char.code c - 48
+    | _ -> raise (Backtrack i)
 
-  let escaped_char s i = match peek s i with
-    | Some '\n' -> '\n', i + 1
-    | Some '\r' -> '\r', i + 1
-    | Some 'n'  -> '\n', i + 1
-    | Some 'r'  -> '\r', i + 1
-    | Some 't'  -> '\t', i + 1
-    | Some 'b'  -> '\b', i + 1
-    | Some '\\' -> '\\', i + 1
-    | Some '"'  -> '"',  i + 1
-    | Some '\'' -> '\'', i + 1
-    | Some ' '  -> ' ',  i + 1
-    | Some ('0'..'9' as c1) ->
-        begin match peek s (i + 1), peek s (i + 2) with
-        | Some ('0'..'9' as c2), Some ('0'..'9' as c3) ->
-            chr (100 * (valch c1) + 10 * (valch c2) + (valch c3)), i + 3
-        | _ -> raise Backtrack
-        end
-    | Some 'x' ->
-        begin match peek s (i + 1), peek s (i + 2) with
-        | (Some ('0'..'9' | 'a'..'f' | 'A'..'F' as c1)),
-          (Some ('0'..'9' | 'a'..'f' | 'A'..'F' as c2)) ->
-            chr (16 * (valch_hex c1) + (valch_hex c2)), i + 3
-        | _ -> raise Backtrack
-        end
-    | _ -> raise Backtrack
+  let get_hex_digit s i =
+    match get s i with
+    | '0'..'9' | 'a'..'f' | 'A'..'F' as c ->
+        let d = Char.code c in
+        if d >= 97 then d - 87
+        else if d >= 65 then d - 55
+        else d - 48
+    | _ -> raise (Backtrack i)
 
-  let eof s i = if peek s i <> None then raise Backtrack
+  let escaped_char s i = match get s i with
+    | '\n' -> '\n', i + 1
+    | '\r' -> '\r', i + 1
+    | 'n'  -> '\n', i + 1
+    | 'r'  -> '\r', i + 1
+    | 't'  -> '\t', i + 1
+    | 'b'  -> '\b', i + 1
+    | '\\' -> '\\', i + 1
+    | '"'  -> '"',  i + 1
+    | '\'' -> '\'', i + 1
+    | ' '  -> ' ',  i + 1
+    | '0'..'9' as c ->
+        let d1 = Char.code c - 48 in
+        let d2 = get_dec_digit s (i + 1) in
+        let d3 = get_dec_digit s (i + 2) in
+        let c = 100 * d1 + 10 * d2 + d3 in
+        if c < 0 || c > 255 then raise (Backtrack (i+2)) else (Char.chr c, i + 3)
+    | 'x' ->
+        let d1 = get_hex_digit s (i + 1) in
+        let d2 = get_hex_digit s (i + 2) in
+        Char.chr (16 * d1 + d2), i + 3
+    | _ -> raise (Backtrack (i + 1))
+
+  let eof s i = if peek s i <> None then raise (Backtrack (i + 1))
 
   let char s =
     match String.length s with
@@ -362,7 +367,7 @@ module Eval = struct
     | _ when s.[0] <> '\\' -> failwith "invalid char token"
     | _ -> try let (c, i) = escaped_char s 1 in
                eof s i; c
-           with Backtrack -> failwith "invalid char token"
+           with Backtrack _ -> failwith "invalid char token"
 
   let backslash_in_string err store s i =
     match peek s i with
@@ -370,15 +375,15 @@ module Eval = struct
     | Some '\r' -> skip_indent s (skip_opt_linefeed s (i+1))
     | Some c ->
         begin try let (x, i) = escaped_char s i in store x; i
-        with Failure _ | Backtrack -> (store '\\'; store c; err (); i + 1)
+        with Backtrack j -> (store '\\'; store c; err j; i + 1)
         end
-    | None -> failwith "invalid string token"
+    | None -> err i; store '\\'; i
 
   let string s =
     let buf = Buffer.create 23 in
     let store = Buffer.add_char buf in
     let errors = ref [] in
-    let err i () = errors := i :: !errors in
+    let err i j = errors := (i, j - i + 1) :: !errors in
     let rec parse i =
       match peek s i with
       | Some '\\' -> parse (backslash_in_string (err (i+1)) store s (i+1))
@@ -409,9 +414,9 @@ let mkERROR s e = ERROR (s, e)
 
 let literal_overflow tok ty = mkERROR tok (Literal_overflow ty)
 let illegal_escape_in_character tok s = mkERROR tok (Illegal_escape_in_character s)
-let illegal_escape_in_string s ofs =
-  mkWARNING (Illegal_escape_in_string
-    (try s.[ofs] with Invalid_argument _ -> assert false))
+let illegal_escape_in_string s (ofs, len) =
+  let sub = try String.sub s ofs len with Invalid_argument _ -> assert false in
+  mkWARNING (Illegal_escape_in_string(sub, ofs))
 
 let mkCHAR s = try CHAR(eval_char s, s)
                with Failure _ -> illegal_escape_in_character (sf "'%s'" s) s
@@ -539,8 +544,8 @@ let parse_position_unterminated_list =
 let warning_of_strings = function
   | ["Comment_start"] -> Some Comment_start
   | ["Comment_not_end"] -> Some Comment_not_end
-  | ["Illegal_escape_in_string"; s] ->
-      Some (Illegal_escape_in_string (eval_char s))
+  | ["Illegal_escape_in_string"; s; si] ->
+      Some (Illegal_escape_in_string(s, int_of_string si))
   | _ -> None
 
 let token_of_strings = function

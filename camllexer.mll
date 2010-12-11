@@ -107,6 +107,8 @@ module Make (Loc : LOC)
   (* Various location/postion related functions *)
 
   let (>>>) p k = { p with pos_cnum = p.pos_cnum + k }
+  let (>+>) p w = Loc.of_positions p (p >>> w)
+  let (<-<) p w = Loc.of_positions (p >>> (-w)) p
   let set_sp c sp = c.lexbuf.lex_start_p <- sp
   let get_sp c = c.lexbuf.lex_start_p
   let move_sp shift c =
@@ -179,11 +181,6 @@ module Make (Loc : LOC)
 
   let illegal_character c = mkERROR (String.make 1 c) (Illegal_character c)
 
-  let warn_comment_not_end op tail =
-    if op <> "" && op.[String.length op - 1] = '*' then
-      tail @ [mkWARNING Comment_not_end]
-    else tail
-
   let mkANTIQUOT c sp ?name s = set_sp c sp; mkANTIQUOT ?name s
 
   let mkBLANKS_ s tail =
@@ -191,11 +188,18 @@ module Make (Loc : LOC)
     | "" -> tail
     | s  -> mkBLANKS s :: tail
 
-  let mkPSYMBOL ?(pre_blanks="") ?(post_blanks="") s =
+  let mkPSYMBOL ?(pre_blanks="") ?(post_blanks="") op =
+    assert (op <> "");
+    let may_warn =
+      if post_blanks = "" && op.[String.length op - 1] = '*'
+      then [mkWARNING Comment_not_end]
+      else []
+    in
     mkSYMBOL "(" ::  mkBLANKS_ pre_blanks
-                 (   mkSYMBOL s
+                 (   mkSYMBOL op
                  ::  mkBLANKS_ post_blanks
-                 (   [mkSYMBOL ")"]))
+                 (   mkSYMBOL ")"
+                 ::  may_warn))
 
   let parse_comment comment c =
     let sp = c.lexbuf.lex_start_p in
@@ -354,11 +358,11 @@ module Make (Loc : LOC)
     | '(' (not_star_symbolchar symbolchar* as op) ')'
                                        (* Last time I checked, OCaml didn't warn
                                           this one. *)
-                                       { warn_comment_not_end op (mkPSYMBOL op) }
+                                       { mkPSYMBOL op }
     | '(' (not_star_symbolchar symbolchar* as op) (blank+ as post_blanks) ')'
                                                     { mkPSYMBOL ~post_blanks op }
     | '(' (blank+ as pre_blanks) (symbolchar+ as op) ')'
-                           { warn_comment_not_end op (mkPSYMBOL ~pre_blanks op) }
+                          { mkPSYMBOL ~pre_blanks op }
     | '(' (blank+ as pre_blanks) (symbolchar+ as op) (blank+ as post_blanks) ')'
                                         { mkPSYMBOL ~pre_blanks ~post_blanks op }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"
@@ -454,15 +458,20 @@ module Make (Loc : LOC)
     | [] -> []
     | [tok] -> [(tok, loc)]
     | toks ->
-      let token_width = String.length <.> string_of_token in
-      let rec loop p = function
+      let rec loop pp p = function
         | [] -> assert (p = Loc.stop_pos loc); []
-        | WARNING _ as wtok :: toks -> (wtok, loc) :: loop p toks
+        | WARNING Comment_start as tok :: toks ->
+            (tok, p >+> 2) :: loop pp p toks
+        | WARNING Comment_not_end as tok :: toks ->
+            (tok, p <-< 2) :: loop pp p toks
+        | WARNING (Illegal_escape_in_string(s, i)) as tok :: toks ->
+            (tok, (pp >>> i) >+> 1 + String.length s) :: loop pp p toks
         | tok :: toks ->
-            let w = token_width tok in
-            let p' = p >>> w in
-            (tok, Loc.of_positions p p') :: loop p' toks
-      in loop (Loc.start_pos loc) toks
+            let p' = p >>> token_width tok in
+            (tok, Loc.of_positions p p') :: loop p p' toks
+      in
+      let p = Loc.start_pos loc
+      in loop p p toks
 
   (* I do not really know what to do about the ``end of input''.
      I see various options:

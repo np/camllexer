@@ -92,7 +92,8 @@ and newline = LF | CR | CRLF
 and warning =
   | Comment_start
   | Comment_not_end
-  | Illegal_escape_in_string of char
+  | Illegal_escape_in_string of string * int
+      (** The offending escaping sequence and its offset in the string literal *)
 
 and error =
   | Illegal_character           of char
@@ -194,17 +195,18 @@ val message_of_warning : warning -> string
 
 val eval_char : string -> char
   (** Given a char literal body, it interprets the escape sequences (backslashes)
-      and return the interpreted or raise [Failure] if an incorrect escape
+      and returns the interpreted or raises [Failure] if an incorrect escape
       sequence is found.
 
       Note that [Camltoken.eval_char (Char.escaped c)] returns [c] *)
 
-val eval_string : string -> string * int list
+val eval_string : string -> string * (int * int) list
   (** [Camltoken.eval_string s]
       Given a literal string body, it interprets the escape sequences (backslashes)
       and return the interpreted string plus a list of incorrect escape
       sequences.
       For each incorrect escape sequence, the list holds the offset of the
-      first character of the escape sequence (i.e. the character after the backslash).
+      first character of the escape sequence (i.e. the character after the
+      backslash), and the length of the offending sequence.
 
       Note that [fst (Camltoken.eval_string (String.escaped s))] returns [s] *)
