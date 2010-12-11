@@ -20,15 +20,10 @@
 
 module type LOC = sig
   type t
-  val ghost : t
-  val of_lexbuf : Lexing.lexbuf -> t
+  val of_lexbuf    : Lexing.lexbuf -> t
   val of_positions : Lexing.position -> Lexing.position -> t
-  val move_both : int -> t -> t
-  val start_pos : t -> Lexing.position
-  val stop_pos  : t -> Lexing.position
-  val to_string : t -> string
-  exception Exc_located of t * exn
-  val raise : t -> exn -> 'a
+  val start_pos    : t -> Lexing.position
+  val stop_pos     : t -> Lexing.position
 end
 
 type 'a iterator = unit -> 'a option
