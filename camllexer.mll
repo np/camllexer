@@ -42,15 +42,6 @@ let flatten_iterator_list next0 =
             Some x
   in next
 
-(* See loc.mli for actual documentation *)
-module type LOC = sig
-  type t
-  val of_lexbuf    : Lexing.lexbuf -> t
-  val of_positions : Lexing.position -> Lexing.position -> t
-  val start_pos    : t -> Lexing.position
-  val stop_pos     : t -> Lexing.position
-end
-
 let (<.>) f g x = f (g x)
 
 let sf = Printf.sprintf
@@ -65,17 +56,25 @@ let default_flags = { quotations = false
                     ; line_directives = true
                     }
 
-module Make (Loc : LOC)
-= struct
+type position = Lexing.position = {  pos_fname : string;
+  pos_lnum : int;
+    pos_bol : int;
+      pos_cnum : int;
+}
 
-  open Lexing
 
-  type token = (caml_token * Loc.t)
+type 'a located = { before_pos : position
+                  ; located    : 'a
+                  ; after_pos  : position }
+
+let located bpos x apos = { before_pos = bpos; located = x; after_pos = apos }
+
+  type token = caml_token located
 
   type context =
   { stack      : (position * unterminated) list (** Stack of opened constructs *)
   ; flags      : flags (** Lexing flavors *)
-  ; lexbuf     : lexbuf
+  ; lexbuf     : Lexing.lexbuf
   ; buffer     : Buffer.t
   }
 
@@ -102,23 +101,20 @@ module Make (Loc : LOC)
   (* Various location/postion related functions *)
 
   let (>>>) p k = { p with pos_cnum = p.pos_cnum + k }
-  let (>+>) p w = Loc.of_positions p (p >>> w)
-  let (<-<) p w = Loc.of_positions (p >>> (-w)) p
-  let set_sp c sp = c.lexbuf.lex_start_p <- sp
-  let get_sp c = c.lexbuf.lex_start_p
-  let move_sp shift c =
-    c.lexbuf.lex_start_p <- c.lexbuf.lex_start_p >>> shift
+  let set_sp c sp = c.lexbuf.Lexing.lex_start_p <- sp
+  let get_sp c = c.lexbuf.Lexing.lex_start_p
+  let move_sp shift c = set_sp c (get_sp c >>> shift)
 
   (* Update the current location with file name and line number. *)
 
   let update_absolute_position c file line =
     let lexbuf = c.lexbuf in
-    let pos = lexbuf.lex_curr_p in
+    let pos = lexbuf.Lexing.lex_curr_p in
     let new_file = match file with
                   | None -> pos.pos_fname
                   | Some s -> s
     in
-    lexbuf.lex_curr_p <- { pos with
+    lexbuf.Lexing.lex_curr_p <- { pos with
       pos_fname = new_file;
       pos_lnum = line;
       pos_bol = pos.pos_cnum;
@@ -126,8 +122,8 @@ module Make (Loc : LOC)
 
   let update_relative_position c line chars =
     let lexbuf = c.lexbuf in
-    let pos = lexbuf.lex_curr_p in
-    lexbuf.lex_curr_p <- { pos with
+    let pos = lexbuf.Lexing.lex_curr_p in
+    lexbuf.Lexing.lex_curr_p <- { pos with
       pos_lnum = pos.pos_lnum + line;
       pos_bol = pos.pos_cnum - chars;
     }
@@ -153,7 +149,7 @@ module Make (Loc : LOC)
 
   let update_loc c =
     let lb = c.lexbuf in
-    let len = lb.lex_curr_pos - lb.lex_start_pos in
+    let len = lb.Lexing.lex_curr_pos - lb.Lexing.lex_start_pos in
     let newlines, last_newline_offset = count_newlines len (Lexing.lexeme_char lb) in
     let chars = len - 1 - last_newline_offset in
     if newlines <> 0 then update_relative_position c newlines chars
@@ -162,7 +158,7 @@ module Make (Loc : LOC)
     let sp = get_sp c in
     let r = f c c.lexbuf in
     set_sp c sp; r
-  let parse_in frame f c = f { c with stack = (c.lexbuf.lex_start_p, frame) :: c.stack } c.lexbuf
+  let parse_in frame f c = f { c with stack = (get_sp c, frame) :: c.stack } c.lexbuf
   let store_parse f c = store c ; f c c.lexbuf
   let parse f c = f c c.lexbuf
   let parse' f c () = f c c.lexbuf
@@ -197,10 +193,10 @@ module Make (Loc : LOC)
                  ::  may_warn))
 
   let parse_comment comment c =
-    let sp = c.lexbuf.lex_start_p in
+    let sp = get_sp c in
     let r = parse_in Ucomment comment c in
     let contents = buff_contents c in
-    c.lexbuf.lex_start_p <- sp;
+    set_sp c sp;
     match r with
     | [] -> mkCOMMENT contents
     | us -> unterminated contents us
@@ -211,10 +207,10 @@ module Make (Loc : LOC)
         q_loc      = loc      ;
         q_contents = contents }
     in
-    let sp = c.lexbuf.lex_start_p in
+    let sp = get_sp c in
     let r = parse_in Uquotation quotation c in
     let contents = buff_contents c in
-    c.lexbuf.lex_start_p <- sp;
+    set_sp c sp;
     match r with
     | [] -> let s = contents in
             mkQUOTATION (mk (String.sub s 0 (String.length s - 2)))
@@ -361,8 +357,8 @@ module Make (Loc : LOC)
     | ['~' '?' '!' '=' '<' '>' '|' '&' '@' '^' '+' '-' '*' '/' '%' '\\'] symbolchar *
                                                             as x { [mkSYMBOL x] }
     | eof
-            { let pos = lexbuf.lex_curr_p in
-              lexbuf.lex_curr_p <- { pos with pos_bol  = pos.pos_bol  + 1 ;
+            { let pos = lexbuf.Lexing.lex_curr_p in
+              lexbuf.Lexing.lex_curr_p <- { pos with pos_bol  = pos.pos_bol  + 1 ;
                                               pos_cnum = pos.pos_cnum + 1 }; [] }
     | _ as c                                            { [illegal_character c] }
 
@@ -377,7 +373,7 @@ module Make (Loc : LOC)
                   parse' comment c }
     | ident                                             { store_parse comment c }
     | string                              { update_loc c; store_parse comment c }
-    | unterminated_string           { update_loc c; store c; (c.lexbuf.lex_start_p, Ustring) :: c.stack }
+    | unterminated_string           { update_loc c; store c; (get_sp c, Ustring) :: c.stack }
     | "''"                                              { store_parse comment c }
     | char                                { update_loc c; store_parse comment c }
     | eof                                                             { c.stack }
@@ -441,24 +437,26 @@ module Make (Loc : LOC)
     | Some x -> buff.[0] <- x; 1
     | _      -> 0
 
-  let distribute_location loc = function
+  let distribute_positions p0 _pN =
+    let rec loop pp p = function
+      | [] -> []
+      | WARNING Comment_start as tok :: toks ->
+          located p tok (p >>> 2) :: loop pp p toks
+      | WARNING Comment_not_end as tok :: toks ->
+          located (p >>> (-2)) tok p :: loop pp p toks
+      | WARNING (Illegal_escape_in_string(s, i)) as tok :: toks ->
+          (* TODO: Wrong position if the string contains newlines *)
+          let ppi = pp >>> i in
+          located ppi tok (ppi >>> 1 + String.length s) :: loop pp p toks
+      | tok :: toks ->
+          let p' = p >>> token_width tok in
+          located p tok p' :: loop p p' toks
+    in loop p0 p0
+
+  let rec distribute_location bpos apos = function
     | [] -> []
-    | [tok] -> [(tok, loc)]
-    | toks ->
-      let rec loop pp p = function
-        | [] -> assert (p = Loc.stop_pos loc); []
-        | WARNING Comment_start as tok :: toks ->
-            (tok, p >+> 2) :: loop pp p toks
-        | WARNING Comment_not_end as tok :: toks ->
-            (tok, p <-< 2) :: loop pp p toks
-        | WARNING (Illegal_escape_in_string(s, i)) as tok :: toks ->
-            (tok, (pp >>> i) >+> 1 + String.length s) :: loop pp p toks
-        | tok :: toks ->
-            let p' = p >>> token_width tok in
-            (tok, Loc.of_positions p p') :: loop p p' toks
-      in
-      let p = Loc.start_pos loc
-      in loop p p toks
+    | [tok] -> [located bpos tok apos]
+    | toks -> distribute_positions bpos apos toks
 
   (* I do not really know what to do about the ``end of input''.
      I see various options:
@@ -476,13 +474,14 @@ module Make (Loc : LOC)
   let from_context c =
     let next_list () =
       let toks = parse token c in
-      let loc = Loc.of_lexbuf c.lexbuf in
-      distribute_location loc toks
+      let bpos = Lexing.lexeme_start_p c.lexbuf in
+      let apos = Lexing.lexeme_end_p c.lexbuf in
+      distribute_location bpos apos toks
     in flatten_iterator_list next_list
 
   let from_lexbuf flags pos lb =
-    lb.lex_abs_pos <- pos.pos_cnum;
-    lb.lex_curr_p  <- pos;
+    lb.Lexing.lex_abs_pos <- pos.pos_cnum;
+    lb.Lexing.lex_curr_p  <- pos;
     from_context { (default_context lb) with flags = flags }
 
   let from_string flags pos str =
@@ -499,5 +498,4 @@ module Make (Loc : LOC)
 
   let from_stream flags pos strm =
     from_iterator flags pos (iterator_of_stream strm)
-end
 }

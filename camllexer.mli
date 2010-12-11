@@ -18,14 +18,6 @@
  * - Nicolas Pouillard: this actual implementation
  *)
 
-module type LOC = sig
-  type t
-  val of_lexbuf    : Lexing.lexbuf -> t
-  val of_positions : Lexing.position -> Lexing.position -> t
-  val start_pos    : t -> Lexing.position
-  val stop_pos     : t -> Lexing.position
-end
-
 type 'a iterator = unit -> 'a option
 
 type flags = { quotations      : bool  (** Enables the lexing of quotations *)
@@ -37,18 +29,22 @@ val default_flags : flags
 (** By default, quotations and anti-quotations are NOT recognized,
     and line_directives are honored. *)
 
-module Make : functor (Loc : LOC) -> sig
-  open Lexing
+type position = Lexing.position
 
-  type token = Camltoken.caml_token * Loc.t
+type 'a located = { before_pos : position
+                  ; located    : 'a
+                  ; after_pos  : position }
 
-  val from_lexbuf : flags -> position -> lexbuf -> token iterator
+val located : position -> 'a -> position -> 'a located
 
-  val from_string : flags -> position -> string -> token iterator
+type token = Camltoken.caml_token located
 
-  val from_channel : flags -> position -> in_channel -> token iterator
+val from_lexbuf : flags -> position -> Lexing.lexbuf -> token iterator
 
-  val from_stream : flags -> position -> char Stream.t -> token iterator
+val from_string : flags -> position -> string -> token iterator
 
-  val from_iterator : flags -> position -> char iterator -> token iterator
-end
+val from_channel : flags -> position -> in_channel -> token iterator
+
+val from_stream : flags -> position -> char Stream.t -> token iterator
+
+val from_iterator : flags -> position -> char iterator -> token iterator

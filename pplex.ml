@@ -17,8 +17,8 @@
  *)
 
 open Camltoken
+open Camllexer
 open Lexing
-module Lex = Camllexer.Make(Loc)
 
 let (|>) x f = f x
 let (<.>) f g x = f (g x)
@@ -118,10 +118,13 @@ let main () : unit =
   in
   let loc = mk_position filename in
   let ic = if filename = "-" then stdin else open_in filename in
-  let flags = { Camllexer.quotations = quotations
+  let flags = { quotations = quotations
               ; antiquotations = antiquotations
               ; line_directives = line_directives } in
-  let next = Lex.from_channel flags loc ic in
+  let next = Camllexer.from_channel flags loc ic in
+  let next () = match next () with
+                | None -> None
+                | Some x -> Some (x.located, Loc.of_positions x.before_pos x.after_pos) in
   let loc_of_unterminated loc = function
     | (pos, _) :: _ -> Loc.of_positions pos (Loc.stop_pos loc)
     | [] -> loc
