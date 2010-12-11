@@ -355,7 +355,7 @@ module Eval = struct
         let d1 = get_hex_digit s (i + 1) in
         let d2 = get_hex_digit s (i + 2) in
         Char.chr (16 * d1 + d2), i + 3
-    | _ -> raise (Backtrack (i + 1))
+    | _ -> raise (Backtrack i)
 
   let eof s i = if peek s i <> None then raise (Backtrack (i + 1))
 
