@@ -353,17 +353,9 @@ module Make (Loc : LOC)
                                                    l_filename=name;
                                                    l_comment=com;
                                                    l_newline=nl}] }
-    | '(' (not_star_symbolchar as op) ')'
-                                                 { mkPSYMBOL (String.make 1 op) }
-    | '(' (not_star_symbolchar symbolchar* as op) ')'
-                                       (* Last time I checked, OCaml didn't warn
-                                          this one. *)
-                                       { mkPSYMBOL op }
-    | '(' (not_star_symbolchar symbolchar* as op) (blank+ as post_blanks) ')'
+    | '(' (not_star_symbolchar symbolchar* as op) (blank* as post_blanks) ')'
                                                     { mkPSYMBOL ~post_blanks op }
-    | '(' (blank+ as pre_blanks) (symbolchar+ as op) ')'
-                          { mkPSYMBOL ~pre_blanks op }
-    | '(' (blank+ as pre_blanks) (symbolchar+ as op) (blank+ as post_blanks) ')'
+    | '(' (blank+ as pre_blanks) (symbolchar+ as op) (blank* as post_blanks) ')'
                                         { mkPSYMBOL ~pre_blanks ~post_blanks op }
     | ( "#"  | "`"  | "'"  | ","  | "."  | ".." | ":"  | "::"
       | ":=" | ":>" | ";"  | ";;" | "_"
