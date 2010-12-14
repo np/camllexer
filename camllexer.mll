@@ -23,6 +23,7 @@
 (** A lexical analyzer. *)
 
 open Camltoken
+open Located
 
 type 'a iterator = unit -> 'a option
 
@@ -63,11 +64,6 @@ type position = Lexing.position = {  pos_fname : string;
 }
 
 
-type 'a located = { before_pos : position
-                  ; located    : 'a
-                  ; after_pos  : position }
-
-let located bpos x apos = { before_pos = bpos; located = x; after_pos = apos }
 
   type token = caml_token located
 
@@ -441,21 +437,21 @@ let located bpos x apos = { before_pos = bpos; located = x; after_pos = apos }
     let rec loop pp p = function
       | [] -> []
       | WARNING Comment_start as tok :: toks ->
-          located p tok (p >>> 2) :: loop pp p toks
+          locate p tok (p >>> 2) :: loop pp p toks
       | WARNING Comment_not_end as tok :: toks ->
-          located (p >>> (-2)) tok p :: loop pp p toks
+          locate (p >>> (-2)) tok p :: loop pp p toks
       | WARNING (Illegal_escape_in_string(s, i)) as tok :: toks ->
           (* TODO: Wrong position if the string contains newlines *)
           let ppi = pp >>> i in
-          located ppi tok (ppi >>> 1 + String.length s) :: loop pp p toks
+          locate ppi tok (ppi >>> 1 + String.length s) :: loop pp p toks
       | tok :: toks ->
           let p' = p >>> token_width tok in
-          located p tok p' :: loop p p' toks
+          locate p tok p' :: loop p p' toks
     in loop p0 p0
 
   let rec distribute_location bpos apos = function
     | [] -> []
-    | [tok] -> [located bpos tok apos]
+    | [tok] -> [locate bpos tok apos]
     | toks -> distribute_positions bpos apos toks
 
   (* I do not really know what to do about the ``end of input''.

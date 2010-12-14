@@ -31,13 +31,7 @@ val default_flags : flags
 
 type position = Lexing.position
 
-type 'a located = { before_pos : position
-                  ; located    : 'a
-                  ; after_pos  : position }
-
-val located : position -> 'a -> position -> 'a located
-
-type token = Camltoken.caml_token located
+type token = Camltoken.caml_token Located.located
 
 val from_lexbuf : flags -> position -> Lexing.lexbuf -> token iterator
 
