@@ -1,0 +1,3 @@
+SYMBOL "<<"
+BLANKS " "
+ERROR "(* >>\n" "Unterminated" "input.ml" "1" "0" "3" "Ucomment"
