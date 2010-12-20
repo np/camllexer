@@ -436,14 +436,10 @@ type position = Lexing.position = {  pos_fname : string;
   let distribute_positions p0 _pN =
     let rec loop pp p = function
       | [] -> []
-      | WARNING Comment_start as tok :: toks ->
-          locate p tok (p >>> 2) :: loop pp p toks
       | WARNING Comment_not_end as tok :: toks ->
           locate (p >>> (-2)) tok p :: loop pp p toks
-      | WARNING (Illegal_escape_in_string(s, i)) as tok :: toks ->
-          (* TODO: Wrong position if the string contains newlines *)
-          let ppi = pp >>> i in
-          locate ppi tok (ppi >>> 1 + String.length s) :: loop pp p toks
+      | WARNING _ :: _ ->
+          assert false
       | tok :: toks ->
           let p' = p >>> token_width tok in
           locate p tok p' :: loop p p' toks
@@ -452,6 +448,18 @@ type position = Lexing.position = {  pos_fname : string;
   let rec distribute_location bpos apos = function
     | [] -> []
     | [tok] -> [locate bpos tok apos]
+    | [WARNING Comment_start as t1; COMMENT _ as t2] ->
+        [locate bpos t1 (bpos >>> 2); locate bpos t2 apos]
+    | STRING _ as t1 :: warns ->
+        let rec loop = function
+          | [] -> []
+          | WARNING (Illegal_escape_in_string(s, i)) as t1 :: toks ->
+              (* TODO: Wrong position if the string contains newlines *)
+              let ppi = bpos >>> i in
+              locate ppi t1 (ppi >>> 1 + String.length s) :: loop toks
+          | _ -> assert false
+        in
+        locate bpos t1 apos :: loop warns
     | toks -> distribute_positions bpos apos toks
 
   (* I do not really know what to do about the ``end of input''.
