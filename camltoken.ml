@@ -46,7 +46,6 @@ type caml_token =
   | LINE_DIRECTIVE of line_directive
   | WARNING       of warning
   | ERROR         of string * error
-  | EOI
 
 and newline = LF | CR | CRLF
 
@@ -233,7 +232,6 @@ let string_of_token = function
   | ANTIQUOT      (n, c) -> sf "$%s:%s$" n c
   | QUOTATION     q -> string_of_quotation q
   | NEWLINE nl      -> string_of_newline nl
-  | EOI             -> assert false
   | WARNING _       -> ""
   | LINE_DIRECTIVE ld -> string_of_line_directive ld
 
@@ -263,7 +261,6 @@ let token_width = function
   | ANTIQUOT      (n, c) -> String.length n + String.length c + 3
   | QUOTATION     q -> quotation_width q
   | NEWLINE nl      -> newline_width nl
-  | EOI             -> 0
   | WARNING _       -> 0
   | LINE_DIRECTIVE ld -> line_directive_width ld
 
@@ -286,7 +283,6 @@ let strings_of_token = function
   | COMMENT s        -> ("COMMENT", [s])
   | BLANKS s         -> ("BLANKS", [s])
   | NEWLINE nl       -> ("NEWLINE", [string_of_newline nl])
-  | EOI              -> ("EOI", [])
   | WARNING w        -> ("WARNING", strings_of_warning w)
   | ERROR (tok, err) -> ("ERROR", tok :: let (x,xs) = show_error err in x :: xs)
   | LINE_DIRECTIVE{l_blanks1=bl1;l_zeros=zeros;l_linenum=i;l_blanks2=bl2;
@@ -447,7 +443,6 @@ let mkCOMMENT com = COMMENT com
 let mkBLANKS s = BLANKS s
 let mkNEWLINE nl = NEWLINE nl
 let mkLINE_DIRECTIVE ld = LINE_DIRECTIVE ld
-let eoi = EOI
 
 let newline_of_string = function
   | "\n"   -> LF
@@ -570,7 +565,6 @@ let token_of_strings = function
   | "NEWLINE", ["\n"]        -> Some (NEWLINE LF)
   | "NEWLINE", ["\r"]        -> Some (NEWLINE CR)
   | "NEWLINE", ["\r\n"]      -> Some (NEWLINE CRLF)
-  | "EOI", []                -> Some EOI
   | "WARNING", xs            -> mkWARNING <$> warning_of_strings xs
   | "ERROR", (tok :: x :: xs) ->
       (* Don't you see this code crying for the option monad? *)

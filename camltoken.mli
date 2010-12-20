@@ -60,8 +60,6 @@ type caml_token = (*should we use private here?*)
   | ERROR of string * error
                       (** The erroneous part of the input and an error value
                           explaining the issue. *)
-  | EOI
-                      (** End of input *)
 
 (** The generic quotation type.
     To see how fields are used here is an example:
@@ -132,7 +130,6 @@ val mkLINE_DIRECTIVE : ?bl1:blanks -> ?bl2:blanks -> ?zeros:int -> ?s:string ->
 *)
 val mkWARNING : warning -> caml_token
 val mkERROR : string -> error -> caml_token
-val eoi : caml_token
 
 val string_of_quotation : quotation -> string
 

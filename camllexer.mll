@@ -464,16 +464,15 @@ type position = Lexing.position = {  pos_fname : string;
 
   (* I do not really know what to do about the ``end of input''.
      I see various options:
-       1/ The output stream is infinite and repeats EOI indefinitely
+       1/ With an EOI token.
+          The output stream is infinite and repeats EOI indefinitely
           because each time we give eof to the token rule it gives
           us EOI.
-       2/ The output stream terminates with a single EOI token.
+       2/ With an EOI token. The output stream terminates with a single EOI token.
        3/ The output stream terminates without outputing any EOI token.
 
     Previously it was 1/, and know it is 3/. Implenting 2/ would require
     some state.
-
-    In this situation EOI could just be removed.
    *)
   let from_context c =
     let next_list () =
