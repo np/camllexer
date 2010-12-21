@@ -1,0 +1,6 @@
+File "input.ml", line 1, characters 0-6 (end at line 3, character 1)
+STRING "\n\\a\n"
+File "input.ml", line 2, characters 0-2
+WARNING "Illegal_escape_in_string" "a" "2"
+File "input.ml", line 3, characters 1-2 (end at line 4, character 0)
+NEWLINE "\n"
