@@ -20,7 +20,6 @@
     both the parsed value and the original string representation. For instance
     for int literals, `00000042' will represented by INT (42, "00000042"). *)
 type caml_token = (*should we use private here?*)
-  | KEYWORD of string (** Commonly used for words like `let', `open'... *)
   | LIDENT of string  (** Lower-case identifiers like `foo', `bar42'... *)
   | UIDENT of string  (** Upper-case identifiers like `Foo', `Bar42'... *)
   | SYMBOL of string  (** Symbol-based identifiers like `*', `++/--'... *)
@@ -112,7 +111,6 @@ val mkINT32 : string -> caml_token
 val mkINT64 : string -> caml_token
 val mkNATIVEINT : string -> caml_token
 val mkFLOAT : string -> caml_token
-val mkKEYWORD : string -> caml_token
 val mkLIDENT : string -> caml_token
 val mkUIDENT : string -> caml_token
 val mkSYMBOL : string -> caml_token

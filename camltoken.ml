@@ -25,7 +25,6 @@ type blanks = string
 type comment = string
 
 type caml_token =
-  | KEYWORD       of string
   | LIDENT        of string
   | UIDENT        of string
   | SYMBOL        of string
@@ -206,7 +205,6 @@ let line_directive_width x =
   String.length x.l_blanks1 + x.l_zeros + int_width x.l_linenum + String.length x.l_blanks2 + fn_w + String.length x.l_comment + nl + 1
 
 let string_of_token = function
-  | KEYWORD       s      |
     SYMBOL        s      |
     LIDENT        s      |
     UIDENT        s      |
@@ -241,7 +239,6 @@ the kind of code where the compiler could deduce the right code from
 the spec.
 *)
 let token_width = function
-  | KEYWORD       s      |
     SYMBOL        s      |
     LIDENT        s      |
     UIDENT        s      |
@@ -265,7 +262,6 @@ let token_width = function
   | LINE_DIRECTIVE ld -> line_directive_width ld
 
 let strings_of_token = function
-  | KEYWORD s        -> ("KEYWORD", [s])
   | SYMBOL s         -> ("SYMBOL", [s])
   | LIDENT s         -> ("LIDENT", [s])
   | UIDENT s         -> ("UIDENT", [s])
@@ -430,7 +426,6 @@ let mkNATIVEINT  s = try  NATIVEINT(cvt_nativeint_literal s, s)
 let mkFLOAT      s = try  FLOAT(float_of_string s, s)
                      with Failure _ -> literal_overflow s "float"
 
-let mkKEYWORD s = KEYWORD s
 (* TODO add some assertions? *)
 let mkLIDENT s = LIDENT s
 let mkUIDENT s = UIDENT s
@@ -544,7 +539,6 @@ let warning_of_strings = function
   | _ -> None
 
 let token_of_strings = function
-  | "KEYWORD", [s]           -> Some (KEYWORD s)
   | "SYMBOL", [s]            -> Some (SYMBOL s)
   | "LIDENT", [s]            -> Some (LIDENT s)
   | "UIDENT", [s]            -> Some (UIDENT s)
