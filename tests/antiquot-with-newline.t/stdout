@@ -1,0 +1,4 @@
+File "input.ml", line 1, characters 0-3 (end at line 2, character 1)
+ANTIQUOT "" "\n"
+File "input.ml", line 2, characters 1-2 (end at line 3, character 0)
+NEWLINE "\n"
