@@ -406,7 +406,7 @@ type position = Lexing.position = {  pos_fname : string;
 
   and dollar sp c = parse
     | '$'                                                { [mkANTIQUOT c sp ""] }
-    | ('`'? (identchar*|'.'+) as name) ':'         { parse (antiquot sp name) c }
+    | ('`'? (identchar+|'.'+) as name) ':'         { parse (antiquot sp name) c }
     | newline                { update_chars c 0; store_parse (antiquot sp "") c }
     | _                                        { store_parse (antiquot sp "") c }
 
