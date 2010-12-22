@@ -9,6 +9,8 @@ test:
 	./tests/check-locs -f -w -w $$INPUTS && \
 	./tests/check-locs -A -Q -f -w -w $$INPUTS && \
 	PPLEX=$(PWD)/_build/pplex.byte cmdcheck tests/*.t
+regtest:
+	PPLEX=$(PWD)/_build/pplex.byte cmdcheck tests/*.t
 bigtest:
 	INPUTS='local/1m.ml local/huge.ml' ; \
 	./tests/check-roundtrip -f -w $$INPUTS && \
