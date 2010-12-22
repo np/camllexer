@@ -1,0 +1,9 @@
+#!/bin/sh -e
+echo check-roundtrip
+./tests/check-roundtrip -f -w "$@"
+echo check-roundtrip -A -Q
+./tests/check-roundtrip -A -Q -f -w "$@"
+echo check-locs
+./tests/check-locs -f -w -w "$@"
+echo check-locs -A -Q
+./tests/check-locs -A -Q -f -w -w "$@"
