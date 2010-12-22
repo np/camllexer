@@ -100,6 +100,8 @@ type position = Lexing.position = {  pos_fname : string;
   let set_sp c sp = c.lexbuf.Lexing.lex_start_p <- sp
   let get_sp c = c.lexbuf.Lexing.lex_start_p
   let move_sp shift c = set_sp c (get_sp c >>> shift)
+  let move_cpos shift c =
+    c.lexbuf.Lexing.lex_curr_pos <- c.lexbuf.Lexing.lex_curr_pos + shift
 
   (* Update the current location with file name and line number. *)
 
@@ -207,10 +209,11 @@ type position = Lexing.position = {  pos_fname : string;
     let r = parse_in Uquotation quotation c in
     let contents = buff_contents c in
     set_sp c sp;
+    let drop_end n s = String.sub s 0 (String.length s - n) in
     match r with
     | [] -> let s = contents in
-            mkQUOTATION (mk (String.sub s 0 (String.length s - 2)))
-    | us -> unterminated (string_of_quotation (mk contents)) us
+            mkQUOTATION (mk (drop_end 2 s))
+    | us -> unterminated (drop_end 2 (string_of_quotation (mk contents))) us
 
   }
 
@@ -311,8 +314,8 @@ type position = Lexing.position = {  pos_fname : string;
     | "(*)"       { store c; [mkWARNING Comment_start; parse_comment comment c] }
     | "<<" (quotchar* as beginning)
       { if quotations c
-        then (move_sp (-String.length beginning) c;
-              [parse_quotation quotation c "" ""])
+      then (move_cpos (-String.length beginning) c;
+            [parse_quotation quotation c "" ""])
         else parse (symbolchar_star ("<<" ^ beginning)) c                       }
     | "<<>>"
       { if quotations c
