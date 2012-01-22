@@ -64,6 +64,7 @@ type position = Lexing.position = {  pos_fname : string;
 }
 
 
+(*TODO DEDENT*)
 
   type token = caml_token located
 
@@ -437,9 +438,15 @@ type position = Lexing.position = {  pos_fname : string;
     | Some x -> buff.[0] <- x; 1
     | _      -> 0
 
-  let distribute_positions p0 _pN =
+  let distribute_positions p0 pN =
     let rec loop pp p = function
-      | [] -> []
+      | [] ->
+          (*
+          Printf.eprintf "%d vs %d\n" (p.pos_bol) pN.pos_bol;
+          flush_all ();
+          *)
+          assert (p = pN);
+          []
       | WARNING Comment_not_end as tok :: toks ->
           locate (p >>> (-2)) tok p :: loop pp p toks
       | WARNING _ :: _ ->
