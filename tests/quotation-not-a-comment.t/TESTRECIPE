@@ -1,7 +1,7 @@
 #!/bin/bash
 
 testname='quotation-not-a-comment.t'
-command='/home/np/w/a/camllexer/pplex.byte'
+command="$PPLEX"
 args=( '-Q' '-s' 'input.ml' )
 exit_code='0'
 stdin_file='/dev/null'

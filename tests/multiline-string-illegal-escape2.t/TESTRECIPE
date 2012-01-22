@@ -1,7 +1,7 @@
 #!/bin/bash
 
 testname='multiline-string-illegal-escape2.t'
-command='/home/np/w/a/camllexer/pplex.byte'
+command="$PPLEX"
 args=( '-s' '-l' '-w' 'input.ml' )
 exit_code='0'
 stdin_file='/dev/null'
