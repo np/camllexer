@@ -12,8 +12,7 @@ Library camlexer
   BuildTools: ocamlbuild
   Modules:  Camllexer,
             Camltoken,
-            Located,
-            Substloc
+            Located
   XMETAEnable: true
   XMETADescription: camllexer - enhanced lexer for Caml dialects.
   XMETAType: library
@@ -22,6 +21,14 @@ Library camlexer
 Executable Pplex
   Path: .
   MainIs:         Pplex.ml
+  CompiledObject: byte
+  BuildDepends:   camlexer
+  BuildTools:     ocamlbuild
+  Install:        false
+
+Executable Substloc
+  Path: .
+  MainIs:         Substloc.ml
   CompiledObject: byte
   BuildDepends:   camlexer
   BuildTools:     ocamlbuild
