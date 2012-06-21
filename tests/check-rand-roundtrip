@@ -12,7 +12,7 @@ done
 input="$(mktemp --suffix .ml)"
 echo -n "$prefix" > "$input"
 dd if=/dev/urandom of="$input" oflag=append count=1 bs="$count" 2>/dev/null
-lex=${PPLEX:-$(dirname $0)/../pplex.byte}
+lex=${PPLEX:-$(dirname $0)/../Pplex.byte}
 if "$lex" -f "$input" | cmp "$input" /dev/stdin; then
   rm "$input"
 else
