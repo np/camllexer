@@ -1,11 +1,11 @@
 build:
-	ocamlbuild pplex.byte substloc.byte
+	ocamlbuild Pplex.byte Substloc.byte
 debug:
-	ocamlbuild -tags debug pplex.byte substloc.byte
+	ocamlbuild -tags debug Pplex.byte Substloc.byte
 checkidentities:
 	./tests/check-identities `find tests -path '*.t/*' \( -name stdin -o -name '*.ml' \)`
 regtest:
-	PPLEX=$(PWD)/_build/pplex.byte cmdcheck tests/*.t
+	PPLEX=$(PWD)/_build/Pplex.byte cmdcheck tests/*.t
 test: checkidentities regtest
 bigtest:
 	./tests/check-identities local/1m.ml local/huge.ml
