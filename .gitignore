@@ -1,4 +1,14 @@
 /_build
-Pplex.byte
-Substloc.byte
+/Pplex.byte
+/Substloc.byte
+/configure
+/META
+/README.txt
+/INSTALL.txt
+/AUTHORS.txt
+/setup.ml
+/myocamlbuild.ml
 *.swp
+*.mllib
+*.data
+*.log
