@@ -1,7 +1,5 @@
 build:
-	ocamlbuild Pplex.byte Substloc.byte
-debug:
-	ocamlbuild -tags debug Pplex.byte Substloc.byte
+	ocaml setup.ml -build
 checkidentities:
 	./tests/check-identities `find tests -path '*.t/*' \( -name stdin -o -name '*.ml' \)`
 regtest:
