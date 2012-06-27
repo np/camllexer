@@ -1,7 +1,7 @@
 # -*- conf -*-
 OASISFormat: 0.3
 Name:        camllexer
-Version:     0.0.0
+Version:     1.1.0
 Synopsis:    camllexer - enhanced lexer for Caml dialects.
 Authors:     Nicolas Pouillard
 License:     LGPL
