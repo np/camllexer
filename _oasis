@@ -7,7 +7,7 @@ Authors:     Nicolas Pouillard
 License:     LGPL
 Plugins:     META (0.3)
 
-Library camlexer
+Library camllexer
   Path: .
   BuildTools: ocamlbuild
   Modules:  Camllexer,
@@ -22,7 +22,7 @@ Executable Pplex
   Path: .
   MainIs:         Pplex.ml
   CompiledObject: byte
-  BuildDepends:   camlexer
+  BuildDepends:   camllexer
   BuildTools:     ocamlbuild
   Install:        false
 
@@ -30,6 +30,6 @@ Executable Substloc
   Path: .
   MainIs:         Substloc.ml
   CompiledObject: byte
-  BuildDepends:   camlexer
+  BuildDepends:   camllexer
   BuildTools:     ocamlbuild
   Install:        false
