@@ -1,4 +1,5 @@
 /_build
+/_dist
 /Pplex.byte
 /Substloc.byte
 /configure
