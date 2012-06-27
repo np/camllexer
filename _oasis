@@ -1,0 +1,35 @@
+# -*- conf -*-
+OASISFormat: 0.3
+Name:        camllexer
+Version:     0.0.0
+Synopsis:    camllexer - enhanced lexer for Caml dialects.
+Authors:     Nicolas Pouillard
+License:     LGPL
+Plugins:     META (0.3)
+
+Library camlexer
+  Path: .
+  BuildTools: ocamlbuild
+  Modules:  Camllexer,
+            Camltoken,
+            Located
+  XMETAEnable: true
+  XMETADescription: camllexer - enhanced lexer for Caml dialects.
+  XMETAType: library
+  XMETARequires:
+
+Executable Pplex
+  Path: .
+  MainIs:         Pplex.ml
+  CompiledObject: byte
+  BuildDepends:   camlexer
+  BuildTools:     ocamlbuild
+  Install:        false
+
+Executable Substloc
+  Path: .
+  MainIs:         Substloc.ml
+  CompiledObject: byte
+  BuildDepends:   camlexer
+  BuildTools:     ocamlbuild
+  Install:        false
